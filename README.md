@@ -18,13 +18,23 @@
 - **web3.py** for interacting with JSON-RPC and deploying contracts
 
 ### Backend Framework
-- **Python 3.10+** (in container)  
+- **Python 3.18+** (in container)  
 - **Django-Ninja**  
 - **uvicorn** (ASGI server)  
 - **ipfshttpclient**  
 - **python-dotenv** (env-file loader)
+- **Postgres (in container)
+- **Redis (in container)
+- **Celery (in container)
 
 ### Frontend
 - **Node.js 16+** (in container)  
 - **react**, **react-dom**, **react-scripts**  
 - **Elastic UI**
+
+### Pipeline
+- **pre-commit
+- **ruff
+- **Github actions
+- **Kubernetes
+- **Argo
