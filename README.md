@@ -8,7 +8,7 @@
 - **GitHub**
 
 ### Ethereum Test Node
-- **Ganache CLI** (Truffle Suite Docker image)
+- **Ganache** (Truffle Suite Docker image)
 
 ### Off-Chain Storage
 - **IPFS** (go-ipfs Docker image)
@@ -23,9 +23,9 @@
 - **uvicorn** (ASGI server)  
 - **ipfshttpclient**  
 - **python-dotenv** (env-file loader)
-- **Postgres (in container)
-- **Redis (in container)
-- **Celery (in container)
+- **Postgres (Docker image)
+- **Redis (Docker image)
+- **Celery (Docker image)
 
 ### Frontend
 - **Node.js 16+** (in container)  

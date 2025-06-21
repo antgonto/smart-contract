@@ -1,0 +1,42 @@
+@startuml
+actor "Security Analyst" as SA
+participant "Monitoring System" as MS
+participant "Alert API" as AlertAPI
+participant "Incident API" as IncidentAPI
+participant "Asset Database" as AssetDB
+participant "Vulnerability Database" as VulnDB
+participant "Threat Intelligence" as TI
+participant "User Activity Logger" as ActivityLog
+
+== Alert Reception ==
+MS -> AlertAPI: Send alert (source, type, severity)
+AlertAPI -> AlertAPI: Store alert in "alerts" table
+AlertAPI --> SA: Notify alert received
+
+== Incident Creation ==
+SA -> IncidentAPI: Create incident (type, description, severity, status)
+IncidentAPI -> IncidentAPI: Insert record in "incidents" table
+IncidentAPI --> SA: Return Incident ID
+
+== Asset Association ==
+SA -> IncidentAPI: Associate asset with incident (incident_id, asset_id)
+IncidentAPI -> AssetDB: Verify asset exists
+AssetDB --> IncidentAPI: Return asset details
+IncidentAPI -> IncidentAPI: Insert record in "incident_assets" table
+IncidentAPI --> SA: Confirm asset association
+
+== Correlation Process ==
+IncidentAPI -> VulnDB: Retrieve vulnerabilities for asset
+VulnDB --> IncidentAPI: Return associated vulnerabilities
+IncidentAPI -> TI: Query matching threat intelligence (using asset & vulnerability data)
+TI --> IncidentAPI: Return threat records
+IncidentAPI -> IncidentAPI: Create associations in "threat_incident_association"
+  
+== Logging Activity ==
+SA -> ActivityLog: Log action ("Created incident, associated asset, correlated threat")
+ActivityLog -> ActivityLog: Insert record in "user_activity_logs"
+ActivityLog --> SA: Log confirmation
+
+@enduml
+
+

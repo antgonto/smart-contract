@@ -1,0 +1,38 @@
+[project]
+name = "Contract"
+version = "0.1.0"
+description = "Project using Ruff, Pre-commit, and SonarCloud"
+authors = [
+    { name = "Antonio Gonzalez-Torres", email = "antonio@gonzalez.cr" }
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+lint.select = ["E", "F", "B", "I", "UP", "C90", "N"]
+lint.ignore = ["E501"]
+fix = true
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["Contract"]
+
+[tool.mypy]
+python_version = 3.11
+disallow_untyped_defs = true
+check_untyped_defs = true
+ignore_missing_imports = true
+strict_optional = true
+warn_unused_ignores = true
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

@@ -1,0 +1,37 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-analysis:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install ruff pre-commit black isort mypy
+
+      - name: Run Ruff (fast check)
+        run: ruff format . --check
+
+      - name: Run pre-commit (includes Ruff, Black, isort, etc.)
+        run: pre-commit run --all-files
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v2
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          projectBaseDir: .
