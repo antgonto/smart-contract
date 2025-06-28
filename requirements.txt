@@ -5,8 +5,8 @@ pre-commit==4.2.0
 pydantic-settings==2.8.1
 psycopg==3.2.6
 django-cors-headers==3.14.0
-web3>=6.0.0
-ipfshttpclient>=0.8.0a2
+web3==6.10.0
+ipfshttpclient==0.8.0a2
 celery>=5.3.6
 redis>=5.0.4
 python-dotenv>=1.0.1
@@ -14,3 +14,5 @@ py-solc-x>=1.1.1
 ruff>=0.4.4
 gunicorn>=22.0.0
 psycopg2-binary>=2.9.9
+PyPDF2>=3.0.0
+# Removed duplicate web3 and fixed ipfshttpclient version for compatibility

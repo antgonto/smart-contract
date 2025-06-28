@@ -35,6 +35,13 @@ const Sidebar = () => {
           onClick: () => navigate('/settings'),
           isSelected: location.pathname === '/settings',
           icon: <EuiIcon type="gear" />,
+        },
+        {
+          id: '3',
+          name: 'Register Certificate',
+          onClick: () => navigate('/register-certificate'),
+          isSelected: location.pathname === '/register-certificate',
+          icon: <EuiIcon type="document" />,
         }
       ]
     }

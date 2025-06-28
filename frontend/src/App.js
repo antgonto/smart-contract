@@ -12,6 +12,7 @@ import '@elastic/eui/dist/eui_theme_amsterdam_dark.json';
 
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
+import SettingsMenu from "./pages/SettingsMenu";
 
 function App() {
   return (
@@ -34,7 +35,7 @@ function App() {
                 {/*<Route path="/threat_intelligence" element={<ThreatIntelligenceList />} />*/}
                 {/*<Route path="/dashboard" element={<IncidentDashboard />} />*/}
                 {/*<Route path="/risk_dashboard" element={<IncidentRiskDashboard />} />*/}
-                {/*<Route path="/settings" element={<SettingsMenu />} />*/}
+                <Route path="/settings" element={<SettingsMenu />} />
                 {/* Additional routes can be added here */}
               </Routes>
             </EuiFlexItem>

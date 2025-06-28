@@ -19,5 +19,15 @@ export const fetchDashboardMetrics = async () => {
   return response.data;
 };
 
+export const registerCertificateFromPdf = async (file: File, recipient: string) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  // recipient is sent as a query param
+  const response = await api.post(`/app/v1/smartcontracts/register/?recipient=${encodeURIComponent(recipient)}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
 
 export default api;

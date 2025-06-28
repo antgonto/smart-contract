@@ -16,6 +16,12 @@ RUN pip3 install --no-cache-dir -r requirements.txt \
     --index-url https://pypi.org/simple/ \
     --extra-index-url https://pypi.org/simple/
 
+# Install solc (Solidity compiler) via official static binary
+RUN apt-get update && apt-get install -y wget && \
+    wget -O /usr/local/bin/solc https://github.com/ethereum/solidity/releases/download/v0.8.25/solc-static-linux && \
+    chmod +x /usr/local/bin/solc && \
+    apt-get remove -y wget && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
 
 COPY . .
 
@@ -26,3 +32,6 @@ RUN chmod -R ug+rw /code
 RUN chmod +x /code/entrypoint.sh
 
 USER 1001
+
+# Remove contract watcher from CMD, restore original Django startup
+CMD sh -c "python3 manage.py migrate && python3 -m daphne -b 0.0.0.0 app.asgi:application --port 8000"

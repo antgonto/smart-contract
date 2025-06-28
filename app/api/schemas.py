@@ -9,5 +9,3 @@ class ErrorSchema(Schema):
 
 class SuccessSchema(Schema):
     message: str = Field(..., description="Success message")
-
-
