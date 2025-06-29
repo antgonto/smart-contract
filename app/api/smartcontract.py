@@ -35,9 +35,8 @@ class CertificateOut(BaseModel):
     cert_hash: str
     issuer: str
     recipient: str
-    issued_at: int
-    metadata: str
-    content: str
+    ipfs_hash: str
+    created: str
 
 
 class CertificateUploadIn(BaseModel):
@@ -111,6 +110,8 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
     # 3. Extract metadata
     reader = PdfReader(file)
     metadata = reader.metadata
+    print(metadata)
+
     meta_dict = {
         "title": metadata.title,
         "author": metadata.author,
@@ -144,9 +145,8 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
         cert_hash=cert_hash,
         issuer=issuer,
         recipient=recipient,
-        issued_at=int(datetime.datetime.now().timestamp()),
-        metadata=ipfs_hash,  # Return IPFS hash as metadata
-        content=str(meta_dict),
+        ipfs_hash=ipfs_hash,  # Return IPFS hash as metadata
+        created=str(metadata.creation_date)
     )
 
 

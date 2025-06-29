@@ -36,17 +36,15 @@ const CertificatesList = () => {
   };
 
   const columns = [
-    { field: 'id', name: 'ID' },
-    { field: 'cert_hash', name: 'Certificate Hash' },
-    { field: 'issuer', name: 'Issuer' },
-    { field: 'recipient', name: 'Recipient' },
-    {
-      field: 'ipfs_hash',
-      name: 'IPFS Hash',
-      render: (item: any) => <span style={{ wordBreak: 'break-all' }}>{item.ipfs_hash ?? ''}</span>,
-    },
+    { field: 'id', name: 'ID', width: '2%' },
+    { field: 'block_number', name: 'Block Number', width: '5%' },
+    { field: 'cert_hash', name: 'Certificate Hash', width: '18%' },
+    { field: 'issuer', name: 'Issuer', width: '18%' },
+    { field: 'recipient', name: 'Recipient', width: '18%' },
+    { field: 'ipfs_hash', name: 'IPFS Hash', width: '18%' },
     {
       name: 'Offchain Download',
+      width: '14%',
       render: (item: any) => (
         item.ipfs_hash ? (
           <button onClick={() => handleDownload(item.ipfs_hash)}>Download PDF</button>
@@ -55,17 +53,9 @@ const CertificatesList = () => {
         )
       ),
     },
-    { field: 'block_number', name: 'Block Number' },
-    {
-      field: 'transaction_hash',
-      name: 'Transaction Hash',
-      render: (item: any) => <span style={{ wordBreak: 'break-all' }}>{item.transaction_hash ?? ''}</span>,
-    },
-    { field: 'log_index', name: 'Log Index' },
   ];
 
-
-// Debug: log the certificates to verify data structure
+  // Debug: log the certificates to verify data structure
   React.useEffect(() => {
     if (!loading) {
       console.log('Certificates:', certificates);
@@ -73,8 +63,8 @@ const CertificatesList = () => {
   }, [loading, certificates]);
 
   return (
-    <EuiPageTemplate>
-      <EuiPageTemplate.Section>
+    <EuiPageTemplate restrictWidth={false} style={{ width: '100%', maxWidth: '100%' }}>
+      <EuiPageTemplate.Section style={{ maxWidth: 'none', width: '100%', padding: 0 }}>
         <EuiTitle size="l"><h1>Certificates</h1></EuiTitle>
         <EuiSpacer size="l" />
         {loading ? (
@@ -84,11 +74,14 @@ const CertificatesList = () => {
         ) : certificates.length === 0 ? (
           <div>No certificates found.</div>
         ) : (
-          <EuiBasicTable
-            items={certificates}
-            columns={columns}
-            rowHeader="id"
-          />
+          <div style={{ overflowX: 'auto', width: '100%' }}>
+            <EuiBasicTable
+              items={certificates}
+              columns={columns}
+              rowHeader="id"
+              style={{ width: '100%' }}
+            />
+          </div>
         )}
       </EuiPageTemplate.Section>
     </EuiPageTemplate>
