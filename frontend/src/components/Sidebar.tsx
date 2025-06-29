@@ -24,7 +24,7 @@ const Sidebar = () => {
       items: [
         {
           id: '1',
-          name: 'Certificates Dashboard',
+          name: 'Dashboard',
           onClick: () => navigate('/'),
           isSelected: location.pathname === '/',
           icon: <EuiIcon type="dashboardApp" />
@@ -42,6 +42,13 @@ const Sidebar = () => {
           onClick: () => navigate('/register-certificate'),
           isSelected: location.pathname === '/register-certificate',
           icon: <EuiIcon type="document" />,
+        },
+        {
+          id: '4',
+          name: 'Certificates',
+          onClick: () => navigate('/certificates'),
+          isSelected: location.pathname === '/certificates',
+          icon: <EuiIcon type="indexOpen" />,
         }
       ]
     }

@@ -14,6 +14,7 @@ from PyPDF2 import PdfReader
 from ninja.files import UploadedFile
 from app.api import SEEDWeb3
 from app.api.contract_manager import ContractManager
+from django.http import HttpResponse
 
 router = Router()
 
@@ -61,9 +62,20 @@ class CertificateResponse(Schema):
     message: str | None = None
 
 
+class CertificateListItem(Schema):
+    cert_hash: str
+    issuer: str | None = None
+    recipient: str | None = None
+    metadata: str | None = None
+    content: str | None = None
+    ipfs_hash: str | None = None
+    block_number: int | None = None
+    transaction_hash: str | None = None
+    log_index: int | None = None
+
+
 class CertificateListResponse(Schema):
-    onchain: list[str]
-    offchain: list[str]
+    certificates: list[CertificateListItem]
 
 
 class DashboardMetrics(Schema):
@@ -99,7 +111,6 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
     # 3. Extract metadata
     reader = PdfReader(file)
     metadata = reader.metadata
-    # Example: extract title, author, etc.
     meta_dict = {
         "title": metadata.title,
         "author": metadata.author,
@@ -107,23 +118,22 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
         "producer": metadata.producer,
         "created": str(metadata.creation_date),
     }
-    # 4. Upload to IPFS
+    print("meta_dict: ", meta_dict)
+    # 4. Upload to IPFS (offchain) and get IPFS hash
     with ipfshttpclient.connect(IPFS_API_URL) as client:
         res = client.add_bytes(pdf_bytes)
         ipfs_hash = res
-    # 5. Register on blockchain
+    # 5. Register on blockchain, storing the IPFS hash as metadata
     issuer = manager.web3.eth.accounts[0]
-    # Ensure cert_hash is a hex string (with or without 0x prefix)
     cert_hash_bytes = bytes.fromhex(cert_hash[2:] if cert_hash.startswith('0x') else cert_hash)
-    # Validate recipient is a valid Ethereum address
     if not (isinstance(recipient, str) and recipient.startswith('0x') and len(recipient) == 42):
         raise HttpError(400, f"Recipient must be a valid Ethereum address (got: {recipient})")
     try:
         contract.functions.registerCertificate(
             cert_hash_bytes,
             Web3.to_checksum_address(recipient),
-            str(meta_dict),
-            ipfs_hash,
+            ipfs_hash,  # Store IPFS hash as metadata
+            str(meta_dict),  # Optionally store metadata as content
         ).transact({"from": issuer})
     except Exception as e:
         from web3.exceptions import ContractLogicError
@@ -135,8 +145,8 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
         issuer=issuer,
         recipient=recipient,
         issued_at=int(datetime.datetime.now().timestamp()),
-        metadata=str(meta_dict),
-        content=ipfs_hash,
+        metadata=ipfs_hash,  # Return IPFS hash as metadata
+        content=str(meta_dict),
     )
 
 
@@ -209,108 +219,151 @@ def deploy_contract(request):
     manager.refresh()
     return DeployResponse(success=[True], output=deployed_contracts)
 
-# @router.get("/by_hash/{cert_hash}", response=CertificateOut)
-# def get_certificate(request, cert_hash: str):
-#     if contract is None:
-#         raise HttpError(500, f"Contract not loaded: {abi_load_error}")
-#     cert = contract.functions.getCertificate(Web3.to_bytes(hexstr=cert_hash)).call()
-#     return CertificateOut(
-#         cert_hash=cert_hash,
-#         issuer=cert[1],
-#         recipient=cert[2],
-#         issued_at=cert[3],
-#         metadata=cert[4],
-#         content=cert[5],
-#     )
+@router.post("/upload_offchain", response=CertificateResponse)
+def upload_certificate_offchain(request, file, payload):
+    try:
+        with ipfshttpclient.connect(IPFS_API_URL) as client:
+            res = client.add(file.file)
+            ipfs_hash = res["Hash"]
+    except Exception as e:
+        raise HttpError(500, f"IPFS upload failed: {str(e)}") from e
+    try:
+        cert_hash = Web3.keccak(text=ipfs_hash).hex()
+        issuer = web3.eth.accounts[0]
+        tx = manager.contract.functions.registerCertificate(
+            Web3.to_bytes(hexstr=cert_hash),
+            Web3.to_checksum_address(payload.recipient),
+            ipfs_hash,
+            "",
+        ).transact({"from": issuer})
+        web3.eth.wait_for_transaction_receipt(tx)
+        # TODO: Log to PostgreSQL (certificate, tx hash, user info)
+        return CertificateResponse(
+            ipfs_hash=ipfs_hash, cert_hash=cert_hash, tx_hash=tx.hex()
+        )
+    except Exception as e:
+        raise HttpError(500, f"Blockchain registration failed: {str(e)}") from e
 #
 #
-# @router.get("/by_recipient/{recipient}", response=list[str])
-# def get_certificates_by_recipient(request, recipient: str):
-#     if contract is None:
-#         raise HttpError(500, f"Contract not loaded: {abi_load_error}")
-#     cert_hashes = contract.functions.getCertificatesByRecipient(
-#         Web3.to_checksum_address(recipient)
-#     ).call()
-#     return [web3.to_hex(h) for h in cert_hashes]
-#
-#
-# @router.post("/upload_offchain", response=CertificateResponse)
-# def upload_certificate_offchain(request, file, payload):
-#     try:
-#         with ipfshttpclient.connect(IPFS_API_URL) as client:
-#             res = client.add(file.file)
-#             ipfs_hash = res["Hash"]
-#     except Exception as e:
-#         raise HttpError(500, f"IPFS upload failed: {str(e)}") from e
-#     try:
-#         cert_hash = Web3.keccak(text=ipfs_hash).hex()
-#         issuer = web3.eth.accounts[0]
-#         tx = contract.functions.registerCertificate(
-#             Web3.to_bytes(hexstr=cert_hash),
-#             Web3.to_checksum_address(payload.recipient),
-#             ipfs_hash,
-#             "",
-#         ).transact({"from": issuer})
-#         web3.eth.wait_for_transaction_receipt(tx)
-#         # TODO: Log to PostgreSQL (certificate, tx hash, user info)
-#         return CertificateResponse(
-#             ipfs_hash=ipfs_hash, cert_hash=cert_hash, tx_hash=tx.hex()
-#         )
-#     except Exception as e:
-#         raise HttpError(500, f"Blockchain registration failed: {str(e)}") from e
-#
-#
-# @router.get("/download_offchain/{ipfs_hash}")
-# def download_certificate_offchain(request, ipfs_hash: str):
-#     try:
-#         with ipfshttpclient.connect(IPFS_API_URL) as client:
-#             data = client.cat(ipfs_hash)
-#         return data  # Ninja will handle as binary response
-#     except Exception as e:
-#         raise HttpError(404, f"IPFS download failed: {str(e)}") from e
-#
-#
-# @router.get("/list_certificates", response=CertificateListResponse)
-# def list_certificates(request):
-#     all_cert_hashes = []
-#     all_offchain_hashes = []
-#     try:
-#         event_filter = contract.events.CertificateRegistered.createFilter(fromBlock=0)
-#         events = event_filter.get_all_entries()
-#         for event in events:
-#             cert_hash = event.args.certHash.hex()
-#             metadata = event.args.metadata
-#             all_cert_hashes.append(cert_hash)
-#             if len(metadata) >= 46 and metadata.startswith("Qm"):
-#                 all_offchain_hashes.append(cert_hash)
-#         return CertificateListResponse(
-#             onchain=all_cert_hashes, offchain=all_offchain_hashes
-#         )
-#     except Exception as e:
-#         raise HttpError(500, f"Failed to list certificates: {str(e)}") from e
+@router.get("/download_offchain/{ipfs_hash}")
+def download_certificate_offchain(request, ipfs_hash: str):
+    try:
+        with ipfshttpclient.connect(IPFS_API_URL) as client:
+            data = client.cat(ipfs_hash)
+        # Return as a file response
+        response = HttpResponse(data, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{ipfs_hash}.pdf"'
+        return response
+    except Exception as e:
+        raise HttpError(404, f"IPFS download failed: {str(e)}") from e
+
+
+@router.get("/list_certificates", response=CertificateListResponse)
+def list_certificates(request):
+    certificates = []
+    try:
+        manager.refresh()
+        contract = manager.get_contract()
+        events = contract.events.CertificateRegistered().get_logs(fromBlock=0)
+        for event in events:
+            cert_hash = event.args.certHash.hex()
+            issuer = getattr(event.args, 'issuer', None)
+            recipient = getattr(event.args, 'recipient', None)
+            metadata = getattr(event.args, 'metadata', None)
+            content = getattr(event.args, 'content', None)
+            ipfs_hash = metadata if isinstance(metadata, str) and len(metadata) >= 46 and metadata.startswith("Qm") else None
+            block_number = getattr(event, 'blockNumber', None)
+            transaction_hash = event.transactionHash.hex() if hasattr(event, 'transactionHash') else None
+            log_index = getattr(event, 'logIndex', None)
+            certificates.append({
+                "cert_hash": cert_hash,
+                "issuer": issuer,
+                "recipient": recipient,
+                "metadata": metadata,
+                "content": content,
+                "ipfs_hash": ipfs_hash,
+                "block_number": block_number,
+                "transaction_hash": transaction_hash,
+                "log_index": log_index,
+            })
+        return CertificateListResponse(certificates=certificates)
+    except Exception as e:
+        raise HttpError(500, f"Failed to list certificates: {str(e)}") from e
 
 
 @router.get("/dashboard/metrics", response=DashboardMetrics)
 def dashboard_metrics(request):
+    contract = manager.get_contract()
     onchain = 0
     offchain = 0
-    # # Certificate stats
-    # try:
-    #     event_filter = contract.events.CertificateRegistered.createFilter(fromBlock=0)
-    #     events = event_filter.get_all_entries()
-    #     onchain = len(events)
-    #     offchain = 0
-    #     for event in events:
-    #         metadata = event.args.metadata
-    #         if len(metadata) >= 46 and metadata.startswith("Qm"):
-    #             offchain += 1
-    # except Exception:
-    #     onchain = 0
-    #     offchain = 0
-    total_certificates = onchain
-    # System activity (mocked for now)
-    recent_registrations = min(8, total_certificates)
-    revocations = 2
+    total_certificates = 0
+    recent_registrations = 0
+    recent_registrations_details = []
+    try:
+        if contract is not None:
+            # Fetch CertificateRegistered events
+            reg_events = contract.events.CertificateRegistered().get_logs(fromBlock=0)
+            onchain = len(reg_events)
+            offchain = 0
+            for event in reg_events:
+                metadata = event.args.metadata
+                if isinstance(metadata, str) and len(metadata) >= 46 and metadata.startswith("Qm"):
+                    offchain += 1
+            total_certificates = onchain
+            # Fetch CertificateRevoked events if available
+            try:
+                rev_events = contract.events.CertificateRevoked().get_logs(fromBlock=0)
+            except Exception:
+                rev_events = []
+            # Combine all events for recent operations
+            all_events = []
+            for event in reg_events:
+                all_events.append({
+                    "event": "CertificateRegistered",
+                    "blockNumber": getattr(event, 'blockNumber', 0),
+                    "actor": getattr(event.args, 'issuer', 'unknown') if hasattr(event.args, 'issuer') else 'unknown',
+                    "operation": "Issued Certificate",
+                    "type": "On-chain",
+                    "event_obj": event
+                })
+            for event in rev_events:
+                all_events.append({
+                    "event": "CertificateRevoked",
+                    "blockNumber": getattr(event, 'blockNumber', 0),
+                    "actor": getattr(event.args, 'issuer', 'unknown') if hasattr(event.args, 'issuer') else 'unknown',
+                    "operation": "Revoked Certificate",
+                    "type": "On-chain",
+                    "event_obj": event
+                })
+            # Sort all events by blockNumber descending
+            all_events_sorted = sorted(all_events, key=lambda e: e['blockNumber'], reverse=True)
+            # Prepare recent_registrations and recent_operations
+            recent_registrations = min(8, len([e for e in all_events_sorted if e['event'] == 'CertificateRegistered']))
+            recent_operations = []
+            for e in all_events_sorted:
+                block_number = e['blockNumber']
+                timestamp = None
+                if block_number is not None:
+                    try:
+                        block = manager.web3.eth.get_block(block_number)
+                        timestamp = datetime.datetime.fromtimestamp(block.timestamp).isoformat()
+                    except Exception:
+                        timestamp = None
+                recent_operations.append({
+                    "timestamp": timestamp,
+                    "actor": e['actor'],
+                    "operation": e['operation'],
+                    "type": e['type'],
+                })
+    except Exception as e:
+        print(f"Error fetching certificate stats: {e}")
+        onchain = 0
+        offchain = 0
+        total_certificates = 0
+        recent_registrations = 0
+        recent_operations = []
+    # System activity (mocked for now, except recent_registrations)
+    revocations = len([e for e in recent_operations if e['operation'] == 'Revoked Certificate'])
     signature_verifications = 56
     nfts_minted = 15
     nfts_transferred = 7
@@ -320,45 +373,11 @@ def dashboard_metrics(request):
     ipfs_node_status = "Online"
     backend_status = "Healthy"
     queue_status = "Idle"
-    # Recent operations (mocked)
-    recent_operations = [
-        {
-            "timestamp": str(datetime.datetime.now()),
-            "actor": "alice",
-            "operation": "Issued Certificate",
-            "type": "On-chain",
-        },
-        {
-            "timestamp": str(datetime.datetime.now()),
-            "actor": "bob",
-            "operation": "Revoked Certificate",
-            "type": "Off-chain",
-        },
-        {
-            "timestamp": str(datetime.datetime.now()),
-            "actor": "carol",
-            "operation": "Verified Signature",
-            "type": "On-chain",
-        },
-    ]
-    # Logs (mocked)
-    logs = [
-        {
-            "time": str(datetime.datetime.now()),
-            "event": "ContractEvent",
-            "details": "Certificate #123 issued",
-        },
-        {
-            "time": str(datetime.datetime.now()),
-            "event": "AccessLog",
-            "details": "User bob viewed certificate #122",
-        },
-    ]
-    # User/issuer stats (mocked, replace with real DB queries if available)
-    user = get_user_model()
-    total_users = user.objects.count() if hasattr(user, "objects") else 24
-    issuers = 4
-    active_sessions = 5
+    logs = []
+    # User/issuer stats (mocked for now)
+    total_users = 0
+    issuers = 0
+    active_sessions = 0
     return DashboardMetrics(
         total_certificates=total_certificates,
         onchain_certificates=onchain,

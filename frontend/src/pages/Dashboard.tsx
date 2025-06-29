@@ -20,7 +20,7 @@ import {
   EuiButton,
   EuiCallOut
 } from '@elastic/eui';
-import { fetchDashboardMetrics, registerCertificateFromPdf } from '../services/api';
+import { fetchDashboardMetrics, registerCertificateFromPdf, fetchCertificates } from '../services/api';
 
 const tradeoffMetrics = [
   { key: 'gasCost', label: 'Gas Cost', onChain: 0.021, offChain: 0.002, unit: 'ETH' },
@@ -54,6 +54,7 @@ const Dashboard = () => {
   const [registerLoading, setRegisterLoading] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [registerSuccess, setRegisterSuccess] = useState<any>(null);
+  const [certificates, setCertificates] = useState<any[]>([]);
 
   useEffect(() => {
     fetchDashboardMetrics()
@@ -65,6 +66,9 @@ const Dashboard = () => {
         setError('Failed to load dashboard metrics');
         setLoading(false);
       });
+    fetchCertificates()
+      .then(data => setCertificates(data.certificates || []))
+      .catch(() => setCertificates([]));
   }, []);
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -88,6 +92,12 @@ const Dashboard = () => {
     } finally {
       setRegisterLoading(false);
     }
+  };
+
+  const downloadCertificate = (ipfsHash: string) => {
+    if (!ipfsHash) return;
+    const url = `https://ipfs.io/ipfs/${ipfsHash}`;
+    window.open(url, '_blank');
   };
 
   if (loading) return <EuiText><p>Loading dashboard...</p></EuiText>;
@@ -170,16 +180,7 @@ const Dashboard = () => {
             ))}
           </EuiFlexGroup>
         </EuiPanel>
-        <EuiSpacer size="l" />
-        {/* Visualizations (Placeholder) */}
-        <EuiPanel paddingSize="l">
-          <EuiTitle size="s"><h2>Visualizations</h2></EuiTitle>
-          <EuiSpacer size="m" />
-          <EuiText><p>[Charts comparing on-chain vs off-chain costs/latency, storage distribution, etc. Connect to charting library and backend data.]</p></EuiText>
-          <EuiProgress value={metrics.onchain_certificates} max={metrics.total_certificates || 1} color="primary" size="l" label="On-chain Storage Usage" />
-          <EuiSpacer size="m" />
-          <EuiProgress value={metrics.offchain_certificates} max={metrics.total_certificates || 1} color="subdued" size="l" label="Off-chain Storage Usage" />
-        </EuiPanel>
+
         <EuiSpacer size="l" />
         {/* Recent Operations Table */}
         <EuiPanel paddingSize="l">
@@ -208,42 +209,30 @@ const Dashboard = () => {
           </EuiFlexGrid>
         </EuiPanel>
         <EuiSpacer size="l" />
-        {/* Register Certificate from PDF */}
-        <EuiPanel style={{ marginBottom: 24 }}>
-          <EuiTitle size="s"><h3>Register Certificate from PDF</h3></EuiTitle>
+        {/* Certificates Table */}
+        <EuiPanel paddingSize="l">
+          <EuiTitle size="s"><h2>On-chain Certificates</h2></EuiTitle>
           <EuiSpacer size="m" />
-          <EuiForm component="form" onSubmit={handleRegister}>
-            <EuiFormRow label="PDF File" fullWidth>
-              <EuiFilePicker
-                id="pdfFilePicker"
-                initialPromptText="Select a PDF file"
-                onChange={files => setPdfFile(files && files.length > 0 ? files[0] : null)}
-                accept="application/pdf"
-                fullWidth
-              />
-            </EuiFormRow>
-            <EuiFormRow label="Recipient Ethereum Address" fullWidth>
-              <EuiFieldText
-                placeholder="0x..."
-                value={recipient}
-                onChange={e => setRecipient(e.target.value)}
-                fullWidth
-              />
-            </EuiFormRow>
-            <EuiButton type="submit" isLoading={registerLoading} fill>Register Certificate</EuiButton>
-          </EuiForm>
-          {registerError && <EuiCallOut color="danger" title="Error" iconType="alert">{registerError}</EuiCallOut>}
-          {registerSuccess && (
-            <EuiCallOut color="success" title="Certificate Registered!" iconType="check">
-              <div>Hash: {registerSuccess.cert_hash}</div>
-              <div>Issuer: {registerSuccess.issuer}</div>
-              <div>Recipient: {registerSuccess.recipient}</div>
-              <div>Issued At: {new Date(registerSuccess.issued_at * 1000).toLocaleString()}</div>
-              <div>Metadata: {registerSuccess.metadata}</div>
-              <div>IPFS: {registerSuccess.content}</div>
-            </EuiCallOut>
-          )}
+          <EuiBasicTable
+            items={certificates}
+            columns={[
+              { field: 'cert_hash', name: 'Certificate Hash' },
+              {
+                name: 'Download',
+                render: (item: any) => (
+                  item.ipfs_hash ? (
+                    <button onClick={() => downloadCertificate(item.ipfs_hash)}>Download PDF</button>
+                  ) : (
+                    <span style={{ color: '#888' }}>Not available</span>
+                  )
+                ),
+              },
+            ]}
+          />
         </EuiPanel>
+        <EuiSpacer size="l" />
+        {/* Register Certificate from PDF */}
+        {/* Moved to its own screen */}
       </EuiPageTemplate>
     </>
   );
