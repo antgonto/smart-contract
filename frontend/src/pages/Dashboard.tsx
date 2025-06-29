@@ -6,21 +6,19 @@ import {
   EuiStat,
   EuiTitle,
   EuiText,
-    EuiPageHeader,
+  EuiPageHeader,
   EuiPageTemplate,
   EuiSpacer,
   EuiHealth,
   EuiBasicTable,
-  EuiProgress,
   EuiFlexGroup,
-  EuiForm,
-  EuiFormRow,
-  EuiFieldText,
-  EuiFilePicker,
-  EuiButton,
-  EuiCallOut
 } from '@elastic/eui';
-import { fetchDashboardMetrics, registerCertificateFromPdf, fetchCertificates } from '../services/api';
+import {
+  fetchDashboardMetrics,
+  registerCertificateFromPdf,
+  fetchCertificates,
+  downloadCertificateOffchain
+} from '../services/api';
 
 const tradeoffMetrics = [
   { key: 'gasCost', label: 'Gas Cost', onChain: 0.021, offChain: 0.002, unit: 'ETH' },
@@ -67,37 +65,28 @@ const Dashboard = () => {
         setLoading(false);
       });
     fetchCertificates()
-      .then(data => setCertificates(data.certificates || []))
+    fetchCertificates()
+      .then((data) => {
+        setCertificates(data.certificates.map((item: any, idx: number) => ({ id: idx + 1, ...item })));
+        setLoading(false);
+      })
       .catch(() => setCertificates([]));
   }, []);
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setRegisterError(null);
-    setRegisterSuccess(null);
-    if (!pdfFile) {
-      setRegisterError('Please select a PDF file.');
-      return;
-    }
-    if (!recipient) {
-      setRegisterError('Please enter a recipient Ethereum address.');
-      return;
-    }
-    setRegisterLoading(true);
+  const downloadCertificate = async(ipfsHash: string) => {
     try {
-      const result = await registerCertificateFromPdf(pdfFile, recipient);
-      setRegisterSuccess(result);
-    } catch (err: any) {
-      setRegisterError(err?.response?.data?.detail || 'Registration failed.');
-    } finally {
-      setRegisterLoading(false);
+      const blob = await downloadCertificateOffchain(ipfsHash);
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${ipfsHash}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Failed to download certificate.');
     }
-  };
-
-  const downloadCertificate = (ipfsHash: string) => {
-    if (!ipfsHash) return;
-    const url = `https://ipfs.io/ipfs/${ipfsHash}`;
-    window.open(url, '_blank');
   };
 
   if (loading) return <EuiText><p>Loading dashboard...</p></EuiText>;
@@ -211,14 +200,17 @@ const Dashboard = () => {
         <EuiSpacer size="l" />
         {/* Certificates Table */}
         <EuiPanel paddingSize="l">
-          <EuiTitle size="s"><h2>On-chain Certificates</h2></EuiTitle>
+          <EuiTitle size="s"><h2>Certificates</h2></EuiTitle>
           <EuiSpacer size="m" />
           <EuiBasicTable
             items={certificates}
             columns={[
-              { field: 'cert_hash', name: 'Certificate Hash' },
+              { field: 'id', name: 'ID', width: '2%' },
+              { field: 'block_number', name: 'Block Number', width: '8%' },
+              { field: 'cert_hash', name: 'On-chain Certificate Hash', width: '40%' },
+              { field: 'ipfs_hash', name: 'Off-chain Certificate Hash', width: '30%'},
               {
-                name: 'Download',
+                name: 'Download Offchain',
                 render: (item: any) => (
                   item.ipfs_hash ? (
                     <button onClick={() => downloadCertificate(item.ipfs_hash)}>Download PDF</button>
@@ -231,8 +223,6 @@ const Dashboard = () => {
           />
         </EuiPanel>
         <EuiSpacer size="l" />
-        {/* Register Certificate from PDF */}
-        {/* Moved to its own screen */}
       </EuiPageTemplate>
     </>
   );
