@@ -18,6 +18,7 @@ const recentOpsColumns = [
   { field: 'actor', name: 'Actor' },
   { field: 'operation', name: 'Operation' },
   { field: 'type', name: 'Type' },
+  { field: 'gas_used', name: 'Gas Used' },
 ];
 
   const downloadCertificate = async(ipfsHash: string) => {
