@@ -1,25 +1,50 @@
 import React, { useEffect, useState } from 'react';
-import { fetchCertificates, downloadCertificateOffchain } from '../services/api';
-import { EuiBasicTable, EuiPageTemplate, EuiTitle, EuiSpacer, EuiLoadingSpinner } from '@elastic/eui';
+import {
+  EuiPanel,
+  EuiTitle,
+  EuiText,
+  EuiPageHeader,
+  EuiPageTemplate,
+  EuiSpacer,
+  EuiBasicTable,
+} from '@elastic/eui';
+import {
+  fetchCertificates,
+  downloadCertificateOffchain, fetchDashboardMetrics
+} from '../services/api';
 
-const CertificatesList = () => {
-  const [certificates, setCertificates] = useState([]);
+const recentOpsColumns = [
+  { field: 'timestamp', name: 'Timestamp' },
+  { field: 'actor', name: 'Actor' },
+  { field: 'operation', name: 'Operation' },
+  { field: 'type', name: 'Type' },
+];
+
+const CertificatesList  = () => {
+  const [metrics, setMetrics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [certificates, setCertificates] = useState<any[]>([]);
 
   useEffect(() => {
+    fetchDashboardMetrics()
+      .then(data => {
+        setMetrics(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        setError('Failed to load dashboard metrics');
+        setLoading(false);
+      });
     fetchCertificates()
       .then((data) => {
         setCertificates(data.certificates.map((item: any, idx: number) => ({ id: idx + 1, ...item })));
         setLoading(false);
       })
-      .catch(() => {
-        setError('Failed to fetch certificates');
-        setLoading(false);
-      });
+      .catch(() => setCertificates([]));
   }, []);
 
-  const handleDownload = async (ipfsHash: string) => {
+  const downloadCertificate = async(ipfsHash: string) => {
     try {
       const blob = await downloadCertificateOffchain(ipfsHash);
       const url = window.URL.createObjectURL(new Blob([blob]));
@@ -35,57 +60,53 @@ const CertificatesList = () => {
     }
   };
 
-  const columns = [
-    { field: 'id', name: 'ID', width: '2%' },
-    { field: 'block_number', name: 'Block Number', width: '5%' },
-    { field: 'cert_hash', name: 'Certificate Hash', width: '18%' },
-    { field: 'issuer', name: 'Issuer', width: '18%' },
-    { field: 'recipient', name: 'Recipient', width: '18%' },
-    { field: 'ipfs_hash', name: 'IPFS Hash', width: '18%' },
-    {
-      name: 'Offchain Download',
-      width: '14%',
-      render: (item: any) => (
-        item.ipfs_hash ? (
-          <button onClick={() => handleDownload(item.ipfs_hash)}>Download PDF</button>
-        ) : (
-          <span style={{ color: '#888' }}>Not available</span>
-        )
-      ),
-    },
-  ];
-
-  // Debug: log the certificates to verify data structure
-  React.useEffect(() => {
-    if (!loading) {
-      console.log('Certificates:', certificates);
-    }
-  }, [loading, certificates]);
+  if (loading) return <EuiText><p>Loading dashboard...</p></EuiText>;
+  if (error) return <EuiText color="danger"><p>{error}</p></EuiText>;
 
   return (
-    <EuiPageTemplate restrictWidth={false} style={{ width: '100%', maxWidth: '100%' }}>
-      <EuiPageTemplate.Section style={{ maxWidth: 'none', width: '100%', padding: 0 }}>
-        <EuiTitle size="l"><h1>Certificates</h1></EuiTitle>
+    <>
+      <EuiPageHeader>
+        <EuiTitle size="l">
+          <h1>Certificate Dashboard</h1>
+        </EuiTitle>
+      </EuiPageHeader>
+      <EuiPageTemplate>
         <EuiSpacer size="l" />
-        {loading ? (
-          <EuiLoadingSpinner size="xl" />
-        ) : error ? (
-          <div>{error}</div>
-        ) : certificates.length === 0 ? (
-          <div>No certificates found.</div>
-        ) : (
-          <div style={{ overflowX: 'auto', width: '100%' }}>
-            <EuiBasicTable
-              items={certificates}
-              columns={columns}
-              rowHeader="id"
-              style={{ width: '100%' }}
-            />
-          </div>
-        )}
-      </EuiPageTemplate.Section>
-    </EuiPageTemplate>
+        {/* Recent Operations Table */}
+        <EuiPanel paddingSize="l">
+          <EuiTitle size="s"><h2>Recent Operations</h2></EuiTitle>
+          <EuiSpacer size="m" />
+          <EuiBasicTable items={metrics.recent_operations} columns={recentOpsColumns} />
+        </EuiPanel>
+        <EuiSpacer size="l" />
+        {/* Certificates Table */}
+        <EuiPanel paddingSize="l">
+          <EuiTitle size="s"><h2>Certificates</h2></EuiTitle>
+          <EuiSpacer size="m" />
+          <EuiBasicTable
+            items={certificates}
+            columns={[
+              { field: 'id', name: 'ID', width: '2%' },
+              { field: 'block_number', name: 'Block Number', width: '8%' },
+              { field: 'cert_hash', name: 'On-chain Certificate Hash', width: '40%' },
+              { field: 'ipfs_hash', name: 'Off-chain Certificate Hash', width: '30%'},
+              {
+                name: 'Download Offchain',
+                render: (item: any) => (
+                  item.ipfs_hash ? (
+                    <button onClick={() => downloadCertificate(item.ipfs_hash)}>Download PDF</button>
+                  ) : (
+                    <span style={{ color: '#888' }}>Not available</span>
+                  )
+                ),
+              },
+            ]}
+          />
+        </EuiPanel>
+        <EuiSpacer size="l" />
+      </EuiPageTemplate>
+    </>
   );
 };
 
-export default CertificatesList;
+export default CertificatesList ;

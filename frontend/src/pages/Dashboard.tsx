@@ -15,9 +15,7 @@ import {
 } from '@elastic/eui';
 import {
   fetchDashboardMetrics,
-  registerCertificateFromPdf,
   fetchCertificates,
-  downloadCertificateOffchain
 } from '../services/api';
 
 const tradeoffMetrics = [
@@ -31,12 +29,6 @@ const tradeoffMetrics = [
   { key: 'compliance', label: 'Compliance', onChain: 'Partial', offChain: 'Full', unit: '' },
 ];
 
-const recentOpsColumns = [
-  { field: 'timestamp', name: 'Timestamp' },
-  { field: 'actor', name: 'Actor' },
-  { field: 'operation', name: 'Operation' },
-  { field: 'type', name: 'Type' },
-];
 const logsColumns = [
   { field: 'time', name: 'Time' },
   { field: 'event', name: 'Event' },
@@ -47,11 +39,6 @@ const Dashboard = () => {
   const [metrics, setMetrics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [recipient, setRecipient] = useState('');
-  const [registerLoading, setRegisterLoading] = useState(false);
-  const [registerError, setRegisterError] = useState<string | null>(null);
-  const [registerSuccess, setRegisterSuccess] = useState<any>(null);
   const [certificates, setCertificates] = useState<any[]>([]);
 
   useEffect(() => {
@@ -65,7 +52,6 @@ const Dashboard = () => {
         setLoading(false);
       });
     fetchCertificates()
-    fetchCertificates()
       .then((data) => {
         setCertificates(data.certificates.map((item: any, idx: number) => ({ id: idx + 1, ...item })));
         setLoading(false);
@@ -73,21 +59,6 @@ const Dashboard = () => {
       .catch(() => setCertificates([]));
   }, []);
 
-  const downloadCertificate = async(ipfsHash: string) => {
-    try {
-      const blob = await downloadCertificateOffchain(ipfsHash);
-      const url = window.URL.createObjectURL(new Blob([blob]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${ipfsHash}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.parentNode?.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (e) {
-      alert('Failed to download certificate.');
-    }
-  };
 
   if (loading) return <EuiText><p>Loading dashboard...</p></EuiText>;
   if (error) return <EuiText color="danger"><p>{error}</p></EuiText>;
@@ -121,7 +92,7 @@ const Dashboard = () => {
     <>
       <EuiPageHeader>
         <EuiTitle size="l">
-          <h1>Certificate Management Dashboard</h1>
+          <h1>Telemetry Dashboard</h1>
         </EuiTitle>
       </EuiPageHeader>
       <EuiPageTemplate>
@@ -171,13 +142,6 @@ const Dashboard = () => {
         </EuiPanel>
 
         <EuiSpacer size="l" />
-        {/* Recent Operations Table */}
-        <EuiPanel paddingSize="l">
-          <EuiTitle size="s"><h2>Recent Operations</h2></EuiTitle>
-          <EuiSpacer size="m" />
-          <EuiBasicTable items={metrics.recent_operations} columns={recentOpsColumns} />
-        </EuiPanel>
-        <EuiSpacer size="l" />
         {/* Logs & Audit Trails */}
         <EuiPanel paddingSize="l">
           <EuiTitle size="s"><h2>Logs & Audit Trails</h2></EuiTitle>
@@ -196,31 +160,6 @@ const Dashboard = () => {
               </EuiFlexItem>
             ))}
           </EuiFlexGrid>
-        </EuiPanel>
-        <EuiSpacer size="l" />
-        {/* Certificates Table */}
-        <EuiPanel paddingSize="l">
-          <EuiTitle size="s"><h2>Certificates</h2></EuiTitle>
-          <EuiSpacer size="m" />
-          <EuiBasicTable
-            items={certificates}
-            columns={[
-              { field: 'id', name: 'ID', width: '2%' },
-              { field: 'block_number', name: 'Block Number', width: '8%' },
-              { field: 'cert_hash', name: 'On-chain Certificate Hash', width: '40%' },
-              { field: 'ipfs_hash', name: 'Off-chain Certificate Hash', width: '30%'},
-              {
-                name: 'Download Offchain',
-                render: (item: any) => (
-                  item.ipfs_hash ? (
-                    <button onClick={() => downloadCertificate(item.ipfs_hash)}>Download PDF</button>
-                  ) : (
-                    <span style={{ color: '#888' }}>Not available</span>
-                  )
-                ),
-              },
-            ]}
-          />
         </EuiPanel>
         <EuiSpacer size="l" />
       </EuiPageTemplate>

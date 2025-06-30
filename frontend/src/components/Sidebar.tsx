@@ -19,12 +19,12 @@ const Sidebar = () => {
 
   const sideNavItems = [
     {
-      name: 'Security Platform',
+      name: 'Blockchain Platform',
       id: 0,
       items: [
         {
           id: '1',
-          name: 'Dashboard',
+          name: 'Telemetry Dashboard',
           onClick: () => navigate('/'),
           isSelected: location.pathname === '/',
           icon: <EuiIcon type="dashboardApp" />

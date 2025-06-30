@@ -15,6 +15,8 @@ from ninja.files import UploadedFile
 from app.api import SEEDWeb3
 from app.api.contract_manager import ContractManager
 from django.http import HttpResponse
+from django.contrib.sessions.models import Session
+from django.utils import timezone
 
 router = Router()
 
@@ -362,22 +364,45 @@ def dashboard_metrics(request):
         total_certificates = 0
         recent_registrations = 0
         recent_operations = []
-    # System activity (mocked for now, except recent_registrations)
+    # System activity (real data)
     revocations = len([e for e in recent_operations if e['operation'] == 'Revoked Certificate'])
-    signature_verifications = 56
-    nfts_minted = 15
-    nfts_transferred = 7
-    oracle_calls = 12
-    # Real-time status (mocked)
-    blockchain_node_status = "Online"
-    ipfs_node_status = "Online"
-    backend_status = "Healthy"
-    queue_status = "Idle"
-    logs = []
-    # User/issuer stats (mocked for now)
-    total_users = 0
-    issuers = 0
-    active_sessions = 0
+    # For signature_verifications, nfts_minted, nfts_transferred, oracle_calls, try to get from contract if available, else set to 0
+    def get_contract_stat(func_name):
+        try:
+            func = getattr(contract.functions, func_name, None)
+            return func().call() if func else 0
+        except Exception:
+            return 0
+
+    signature_verifications = get_contract_stat("getSignatureVerifications")
+    nfts_minted = get_contract_stat("getNFTsMinted")
+    nfts_transferred = get_contract_stat("getNFTsTransferred")
+    oracle_calls = get_contract_stat("getOracleCalls")
+
+    try:
+        blockchain_node_status = "Online" if manager.web3.is_connected() else "Offline"
+    except Exception:
+        blockchain_node_status = "Unknown"
+
+    try:
+        with ipfshttpclient.connect(IPFS_API_URL) as client:
+            ipfs_node_status = "Online" if client.id() else "Offline"
+    except Exception:
+        ipfs_node_status = "Offline"
+    backend_status = "Healthy"  # If this endpoint works, backend is healthy
+    queue_status = "Idle"  # If you have a queue system, replace with real status
+    logs = []  # If you have logs, fetch from DB or file
+    # User/issuer stats (real data)
+    try:
+        User = get_user_model()
+        total_users = User.objects.count()
+        issuers = User.objects.filter(is_staff=True).count() if hasattr(User, 'is_staff') else 0
+        # Count active sessions using Django's session framework
+        active_sessions = Session.objects.filter(expire_date__gt=timezone.now()).count()
+    except Exception:
+        total_users = 0
+        issuers = 0
+        active_sessions = 0
     return DashboardMetrics(
         total_certificates=total_certificates,
         onchain_certificates=onchain,
