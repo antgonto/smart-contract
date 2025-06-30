@@ -316,6 +316,7 @@ def dashboard_metrics(request):
     total_certificates = 0
     recent_registrations = 0
     total_gas_spent = 0
+    cumulative_gas = 0
     try:
         if contract is not None:
             # Fetch CertificateRegistered events
@@ -375,12 +376,16 @@ def dashboard_metrics(request):
                         total_gas_spent += gas_used
                     except Exception:
                         gas_used = None
+                # Calculate cumulative gas
+                if gas_used is not None:
+                    cumulative_gas += gas_used
                 recent_operations.append({
                     "timestamp": timestamp,
                     "actor": e['actor'],
                     "operation": e['operation'],
                     "type": e['type'],
                     "gas_used": gas_used,
+                    "cumulative_gas": cumulative_gas if gas_used is not None else None,
                 })
     except Exception as e:
         print(f"Error fetching certificate stats: {e}")

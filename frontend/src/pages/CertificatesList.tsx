@@ -14,11 +14,11 @@ import {
 } from '../services/api';
 
 const recentOpsColumns = [
-  { field: 'timestamp', name: 'Timestamp' },
-  { field: 'actor', name: 'Actor' },
-  { field: 'operation', name: 'Operation' },
-  { field: 'type', name: 'Type' },
-  { field: 'gas_used', name: 'Gas Used' },
+  { field: 'timestamp', name: 'Timestamp', width: '10%' },
+  { field: 'actor', name: 'Actor', width: '30%' },
+  { field: 'operation', name: 'Operation', width: '10%' },
+  { field: 'type', name: 'Type', width: '10%' },
+  { field: 'gas_used', name: 'Gas Used', width: '10%' },
 ];
 
   const downloadCertificate = async(ipfsHash: string) => {
@@ -39,12 +39,13 @@ const recentOpsColumns = [
 
 const certificateColumns = [
   { field: 'id', name: 'ID', width: '2%' },
-  { field: 'block_number', name: 'Block Number', width: '8%' },
-  { field: 'cert_hash', name: 'On-chain Certificate Hash', width: '40%' },
+  { field: 'block_number', name: 'Block Number', width: '7%' },
+  { field: 'cert_hash', name: 'On-chain Certificate Hash', width: '35%' },
   { field: 'ipfs_hash', name: 'Off-chain Certificate Hash', width: '30%'},
-  { field: 'gas_used', name: 'Gas Used' },
+  { field: 'gas_used', name: 'Gas Used', width: '6%' },
+  { field: 'cumulative_gas', name: 'Cumulative Gas', width: '10%' },
   {
-    name: 'Download Offchain',
+    name: 'Download Off-chain',
     render: (item: any) => (
       item.ipfs_hash ? (
         <button onClick={() => downloadCertificate(item.ipfs_hash)}>Download PDF</button>
@@ -79,7 +80,19 @@ const CertificatesList  = () => {
       .catch(() => setCertificates([]));
   }, []);
 
+  // Compute cumulative gas for recent operations
+  let cumulativeGas = 0;
+  const recentOpsWithCumulative = metrics?.recent_operations?.map((op: any) => {
+    cumulativeGas += op.gas_used || 0;
+    return { ...op, cumulative_gas: cumulativeGas };
+  }) || [];
 
+  // Compute cumulative gas for certificates
+  let certCumulativeGas = 0;
+  const certificatesWithCumulative = certificates.map((cert: any) => {
+    certCumulativeGas += cert.gas_used || 0;
+    return { ...cert, cumulative_gas: certCumulativeGas };
+  });
 
   if (loading) return <EuiText><p>Loading dashboard...</p></EuiText>;
   if (error) return <EuiText color="danger"><p>{error}</p></EuiText>;
@@ -97,7 +110,7 @@ const CertificatesList  = () => {
         <EuiPanel paddingSize="l">
           <EuiTitle size="s"><h2>Recent Operations</h2></EuiTitle>
           <EuiSpacer size="m" />
-          <EuiBasicTable items={metrics.recent_operations} columns={recentOpsColumns} />
+          <EuiBasicTable items={recentOpsWithCumulative} columns={recentOpsColumns} />
         </EuiPanel>
         <EuiSpacer size="l" />
         {/* Certificates Table */}
@@ -105,7 +118,7 @@ const CertificatesList  = () => {
           <EuiTitle size="s"><h2>Certificates</h2></EuiTitle>
           <EuiSpacer size="m" />
           <EuiBasicTable
-            items={certificates}
+            items={certificatesWithCumulative}
             columns={certificateColumns}
             rowHeader="id"
             tableLayout="auto"
