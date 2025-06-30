@@ -65,43 +65,35 @@ services:
       - contract_network
     restart: unless-stopped
 
-#  ipfs:
-#    container_name: ipfs
-#    image: ipfs/go-ipfs:latest
-#    env_file:
-#      - ./.env
-#    environment:
-#      IPFS_API: ${IPFS_API}
-#    ports:
-#      - "${IPFS_5001_PORT}:${IPFS_5001_PORT}"
-#      - "${IPFS_8080_PORT}:${IPFS_8080_PORT}"
-#      - "${IPFS_4001_PORT}:${IPFS_4001_PORT}"
-#
-#    volumes:
-#      - ipfs_data:/data/ipfs
-#    networks:
-#      - contract_network
-#    restart: unless-stopped
-
   ipfs:
     container_name: ipfs
-    image: ipfs/go-ipfs:latest
+    build:
+      context: .
+      dockerfile: ipfs.Dockerfile
     env_file:
       - ./.env
+    # The 'IPFS_API' environment variable is not directly used by the startup script,
+    # but is kept here in case other services depend on it.
     environment:
       IPFS_API: ${IPFS_API}
     ports:
-      # Mapea el puerto 9090 del host al 5001 interno (API + Web UI)
-      - "9090:5001"
-      # Deja el gateway público en 8080 si lo necesitas
-      - "${IPFS_8080_PORT}:${IPFS_8080_PORT}"
-      # Swarm (p2p) sigue en 4001
-      - "${IPFS_4001_PORT}:${IPFS_4001_PORT}"
+      # Exposes the API port (5001) for internal/management access
+      - "5001:5001"
+      # Exposes the Gateway port (8080) for public web access
+      - "${IPFS_8080_PORT}:8080"
+      # Exposes the Swarm port (4001) for peer-to-peer communication
+      - "${IPFS_4001_PORT}:4001"
     volumes:
+      # This volume persists the IPFS data
       - ipfs_data:/data/ipfs
+      # This volume mounts your startup script into the container
+      - ./start_ipfs.sh:/usr/local/bin/start_ipfs.sh
+    # This command tells the container to run your startup script
+    command: ["start_ipfs.sh"]
     networks:
       - contract_network
     restart: unless-stopped
+
 
   redis:
     container_name: redis
@@ -153,4 +145,3 @@ networks:
   contract_network:
     name: contract_network
     driver: bridge
-    external: true

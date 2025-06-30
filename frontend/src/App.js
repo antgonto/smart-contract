@@ -12,6 +12,9 @@ import '@elastic/eui/dist/eui_theme_amsterdam_dark.json';
 
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
+import SettingsMenu from "./pages/SettingsMenu";
+import RegisterCertificate from "./pages/RegisterCertificate";
+import CertificatesList from "./pages/CertificatesList";
 
 function App() {
   return (
@@ -33,8 +36,9 @@ function App() {
                 {/*<Route path="/incidents" element={<IncidentsPage />} />*/}
                 {/*<Route path="/threat_intelligence" element={<ThreatIntelligenceList />} />*/}
                 {/*<Route path="/dashboard" element={<IncidentDashboard />} />*/}
-                {/*<Route path="/risk_dashboard" element={<IncidentRiskDashboard />} />*/}
-                {/*<Route path="/settings" element={<SettingsMenu />} />*/}
+                <Route path="/register-certificate" element={<RegisterCertificate />} />
+                <Route path="/settings" element={<SettingsMenu />} />
+                <Route path="/certificates" element={<CertificatesList />} />
                 {/* Additional routes can be added here */}
               </Routes>
             </EuiFlexItem>

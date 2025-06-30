@@ -19,12 +19,12 @@ const Sidebar = () => {
 
   const sideNavItems = [
     {
-      name: 'Security Platform',
+      name: 'Blockchain Platform',
       id: 0,
       items: [
         {
           id: '1',
-          name: 'Certificates Dashboard',
+          name: 'Telemetry Dashboard',
           onClick: () => navigate('/'),
           isSelected: location.pathname === '/',
           icon: <EuiIcon type="dashboardApp" />
@@ -35,6 +35,20 @@ const Sidebar = () => {
           onClick: () => navigate('/settings'),
           isSelected: location.pathname === '/settings',
           icon: <EuiIcon type="gear" />,
+        },
+        {
+          id: '3',
+          name: 'Register Certificate',
+          onClick: () => navigate('/register-certificate'),
+          isSelected: location.pathname === '/register-certificate',
+          icon: <EuiIcon type="document" />,
+        },
+        {
+          id: '4',
+          name: 'Certificates',
+          onClick: () => navigate('/certificates'),
+          isSelected: location.pathname === '/certificates',
+          icon: <EuiIcon type="indexOpen" />,
         }
       ]
     }

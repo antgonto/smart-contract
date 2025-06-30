@@ -16,7 +16,7 @@ Below is a comprehensive, step‑by‑step tutorial to deploy the certificate‑
    - **gcloud SDK**: https://cloud.google.com/sdk/docs/install
    - **kubectl**: `gcloud components install kubectl`
    - **Docker**: https://docs.docker.com/engine/install/
-   - **Akeyless CLI**: https://docs.akeyless.io/docs/cli-installation  
+   - **Akeyless CLI**: https://docs.akeyless.io/docs/cli-installation
      Use `akeyless login` to authenticate to your Akeyless tenant.
    - **Git** (optional)
 3. **Kubernetes Knowledge**: Familiarity with `kubectl`, Deployments, Services, ConfigMaps, Secrets, and Ingress.
@@ -56,7 +56,7 @@ gcloud auth configure-docker
 # from project root
 docker build \
   -t gcr.io/$PROJECT_ID/cert-app:latest \
-  -f app/Dockerfile2 ./app
+  -f app/Dockerfile ./app
 
 docker push gcr.io/$PROJECT_ID/cert-app:latest
 ```
@@ -66,7 +66,7 @@ docker push gcr.io/$PROJECT_ID/cert-app:latest
 ```bash
 docker build \
   -t gcr.io/$PROJECT_ID/cert-frontend:latest \
-  -f frontend/Dockerfile2 ./frontend
+  -f frontend/Dockerfile ./frontend
 
 docker push gcr.io/$PROJECT_ID/cert-frontend:latest
 ```

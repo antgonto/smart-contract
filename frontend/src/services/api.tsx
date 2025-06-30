@@ -19,5 +19,27 @@ export const fetchDashboardMetrics = async () => {
   return response.data;
 };
 
+export const registerCertificateFromPdf = async (file: File, recipient: string) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  // recipient is sent as a query param
+  const response = await api.post(`/app/v1/smartcontracts/register/?recipient=${encodeURIComponent(recipient)}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
 
-export default api;
+export const fetchCertificates = async () => {
+  const response = await api.get('/app/v1/smartcontracts/list_certificates');
+  return response.data;
+};
+
+export const downloadCertificateOffchain = async (ipfsHash: string) => {
+  const response = await api.get(`/app/v1/smartcontracts/download_offchain/${ipfsHash}`, {
+    responseType: 'blob',
+  });
+  return response.data;
+};
+
+// Only one default export is allowed. Keep api as a named export if needed, or just use named exports for all functions.
+export { api };

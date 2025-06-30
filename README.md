@@ -1,7 +1,7 @@
 ## Tooling
 
 ### Containerization & Orchestration
-- **Docker**  
+- **Docker**
 - **Docker Compose**
 
 ### Source Control
@@ -14,22 +14,22 @@
 - **IPFS** (go-ipfs Docker image)
 
 ### Smart-Contract Compilation & Deployment
-- **py-solc-x** (`solcx`) for installing and invoking the Solidity compiler  
+- **py-solc-x** (`solcx`) for installing and invoking the Solidity compiler
 - **web3.py** for interacting with JSON-RPC and deploying contracts
 
 ### Backend Framework
-- **Python 3.18+** (in container)  
-- **Django-Ninja**  
-- **uvicorn** (ASGI server)  
-- **ipfshttpclient**  
+- **Python 3.18+** (in container)
+- **Django-Ninja**
+- **uvicorn** (ASGI server)
+- **ipfshttpclient**
 - **python-dotenv** (env-file loader)
 - **Postgres (Docker image)
 - **Redis (Docker image)
 - **Celery (Docker image)
 
 ### Frontend
-- **Node.js 16+** (in container)  
-- **react**, **react-dom**, **react-scripts**  
+- **Node.js 16+** (in container)
+- **react**, **react-dom**, **react-scripts**
 - **Elastic UI**
 
 ### Pipeline

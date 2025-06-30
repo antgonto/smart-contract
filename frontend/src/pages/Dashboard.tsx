@@ -6,15 +6,17 @@ import {
   EuiStat,
   EuiTitle,
   EuiText,
-    EuiPageHeader,
+  EuiPageHeader,
   EuiPageTemplate,
   EuiSpacer,
   EuiHealth,
   EuiBasicTable,
-  EuiProgress,
-  EuiFlexGroup
+  EuiFlexGroup,
 } from '@elastic/eui';
-import { fetchDashboardMetrics } from '../services/api';
+import {
+  fetchDashboardMetrics,
+  fetchCertificates,
+} from '../services/api';
 
 const tradeoffMetrics = [
   { key: 'gasCost', label: 'Gas Cost', onChain: 0.021, offChain: 0.002, unit: 'ETH' },
@@ -27,12 +29,6 @@ const tradeoffMetrics = [
   { key: 'compliance', label: 'Compliance', onChain: 'Partial', offChain: 'Full', unit: '' },
 ];
 
-const recentOpsColumns = [
-  { field: 'timestamp', name: 'Timestamp' },
-  { field: 'actor', name: 'Actor' },
-  { field: 'operation', name: 'Operation' },
-  { field: 'type', name: 'Type' },
-];
 const logsColumns = [
   { field: 'time', name: 'Time' },
   { field: 'event', name: 'Event' },
@@ -43,6 +39,7 @@ const Dashboard = () => {
   const [metrics, setMetrics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [certificates, setCertificates] = useState<any[]>([]);
 
   useEffect(() => {
     fetchDashboardMetrics()
@@ -54,7 +51,14 @@ const Dashboard = () => {
         setError('Failed to load dashboard metrics');
         setLoading(false);
       });
+    fetchCertificates()
+      .then((data) => {
+        setCertificates(data.certificates.map((item: any, idx: number) => ({ id: idx + 1, ...item })));
+        setLoading(false);
+      })
+      .catch(() => setCertificates([]));
   }, []);
+
 
   if (loading) return <EuiText><p>Loading dashboard...</p></EuiText>;
   if (error) return <EuiText color="danger"><p>{error}</p></EuiText>;
@@ -88,7 +92,7 @@ const Dashboard = () => {
     <>
       <EuiPageHeader>
         <EuiTitle size="l">
-          <h1>Certificate Management Dashboard</h1>
+          <h1>Telemetry Dashboard</h1>
         </EuiTitle>
       </EuiPageHeader>
       <EuiPageTemplate>
@@ -136,23 +140,7 @@ const Dashboard = () => {
             ))}
           </EuiFlexGroup>
         </EuiPanel>
-        <EuiSpacer size="l" />
-        {/* Visualizations (Placeholder) */}
-        <EuiPanel paddingSize="l">
-          <EuiTitle size="s"><h2>Visualizations</h2></EuiTitle>
-          <EuiSpacer size="m" />
-          <EuiText><p>[Charts comparing on-chain vs off-chain costs/latency, storage distribution, etc. Connect to charting library and backend data.]</p></EuiText>
-          <EuiProgress value={metrics.onchain_certificates} max={metrics.total_certificates || 1} color="primary" size="l" label="On-chain Storage Usage" />
-          <EuiSpacer size="m" />
-          <EuiProgress value={metrics.offchain_certificates} max={metrics.total_certificates || 1} color="subdued" size="l" label="Off-chain Storage Usage" />
-        </EuiPanel>
-        <EuiSpacer size="l" />
-        {/* Recent Operations Table */}
-        <EuiPanel paddingSize="l">
-          <EuiTitle size="s"><h2>Recent Operations</h2></EuiTitle>
-          <EuiSpacer size="m" />
-          <EuiBasicTable items={metrics.recent_operations} columns={recentOpsColumns} />
-        </EuiPanel>
+
         <EuiSpacer size="l" />
         {/* Logs & Audit Trails */}
         <EuiPanel paddingSize="l">
@@ -173,10 +161,10 @@ const Dashboard = () => {
             ))}
           </EuiFlexGrid>
         </EuiPanel>
+        <EuiSpacer size="l" />
       </EuiPageTemplate>
     </>
   );
 };
 
 export default Dashboard;
-
