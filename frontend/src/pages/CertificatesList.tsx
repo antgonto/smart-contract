@@ -20,6 +20,40 @@ const recentOpsColumns = [
   { field: 'type', name: 'Type' },
 ];
 
+  const downloadCertificate = async(ipfsHash: string) => {
+    try {
+      const blob = await downloadCertificateOffchain(ipfsHash);
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${ipfsHash}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Failed to download certificate.');
+    }
+  };
+
+const certificateColumns = [
+  { field: 'id', name: 'ID', width: '2%' },
+  { field: 'block_number', name: 'Block Number', width: '8%' },
+  { field: 'cert_hash', name: 'On-chain Certificate Hash', width: '40%' },
+  { field: 'ipfs_hash', name: 'Off-chain Certificate Hash', width: '30%'},
+  { field: 'gas_used', name: 'Gas Used' },
+  {
+    name: 'Download Offchain',
+    render: (item: any) => (
+      item.ipfs_hash ? (
+        <button onClick={() => downloadCertificate(item.ipfs_hash)}>Download PDF</button>
+      ) : (
+        <span style={{ color: '#888' }}>Not available</span>
+      )
+    ),
+  },
+];
+
 const CertificatesList  = () => {
   const [metrics, setMetrics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -44,21 +78,7 @@ const CertificatesList  = () => {
       .catch(() => setCertificates([]));
   }, []);
 
-  const downloadCertificate = async(ipfsHash: string) => {
-    try {
-      const blob = await downloadCertificateOffchain(ipfsHash);
-      const url = window.URL.createObjectURL(new Blob([blob]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${ipfsHash}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.parentNode?.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (e) {
-      alert('Failed to download certificate.');
-    }
-  };
+
 
   if (loading) return <EuiText><p>Loading dashboard...</p></EuiText>;
   if (error) return <EuiText color="danger"><p>{error}</p></EuiText>;
@@ -85,22 +105,9 @@ const CertificatesList  = () => {
           <EuiSpacer size="m" />
           <EuiBasicTable
             items={certificates}
-            columns={[
-              { field: 'id', name: 'ID', width: '2%' },
-              { field: 'block_number', name: 'Block Number', width: '8%' },
-              { field: 'cert_hash', name: 'On-chain Certificate Hash', width: '40%' },
-              { field: 'ipfs_hash', name: 'Off-chain Certificate Hash', width: '30%'},
-              {
-                name: 'Download Offchain',
-                render: (item: any) => (
-                  item.ipfs_hash ? (
-                    <button onClick={() => downloadCertificate(item.ipfs_hash)}>Download PDF</button>
-                  ) : (
-                    <span style={{ color: '#888' }}>Not available</span>
-                  )
-                ),
-              },
-            ]}
+            columns={certificateColumns}
+            rowHeader="id"
+            tableLayout="auto"
           />
         </EuiPanel>
         <EuiSpacer size="l" />

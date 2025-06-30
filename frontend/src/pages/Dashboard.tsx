@@ -59,34 +59,31 @@ const Dashboard = () => {
       .catch(() => setCertificates([]));
   }, []);
 
+  const systemStats = [
+    { label: 'Revocations', value: metrics?.revocations ?? 0 },
+    { label: 'Signature Verifications', value: metrics?.signature_verifications ?? 0 },
+    { label: 'NFTs Minted', value: metrics?.nfts_minted ?? 0 },
+    { label: 'NFTs Transferred', value: metrics?.nfts_transferred ?? 0 },
+    { label: 'Oracle Calls', value: metrics?.oracle_calls ?? 0 },
+    { label: 'Recent Registrations', value: metrics?.recent_registrations ?? 0 },
+  ];
+
+  const statusPanels = [
+    { label: 'Ethereum Node', status: 'Operational', color: 'success' },
+    { label: 'IPFS Gateway', status: 'Operational', color: 'success' },
+    { label: 'Oracle Service', status: 'Degraded', color: 'warning' },
+    { label: 'Database', status: 'Down', color: 'danger' },
+  ];
+
+  const userStats = [
+    { label: 'Total Users', value: metrics?.total_users ?? 0 },
+    { label: 'Active Users', value: metrics?.active_users ?? 0 },
+    { label: 'Issuers', value: metrics?.issuers ?? 0 },
+    { label: 'Verifiers', value: metrics?.verifiers ?? 0 },
+  ];
 
   if (loading) return <EuiText><p>Loading dashboard...</p></EuiText>;
   if (error) return <EuiText color="danger"><p>{error}</p></EuiText>;
-  if (!metrics || typeof metrics !== 'object') return <EuiText color="danger"><p>Dashboard data is unavailable or malformed.</p></EuiText>;
-
-  // System stats for the grid
-  const systemStats = [
-    { label: 'Certificates Issued (On-chain)', value: metrics.onchain_certificates },
-    { label: 'Certificates Issued (Off-chain)', value: metrics.offchain_certificates },
-    { label: 'Recent Registrations', value: metrics.recent_registrations },
-    { label: 'Revocations/Expiries', value: metrics.revocations },
-    { label: 'Signature Verifications', value: metrics.signature_verifications },
-    { label: 'NFTs Minted', value: metrics.nfts_minted },
-    { label: 'NFTs Transferred', value: metrics.nfts_transferred },
-    { label: 'Oracle Calls', value: metrics.oracle_calls },
-  ];
-  const statusPanels = [
-    { label: 'Blockchain Node', status: metrics.blockchain_node_status, color: metrics.blockchain_node_status === 'Online' ? 'success' : 'danger' },
-    { label: 'IPFS Node', status: metrics.ipfs_node_status, color: metrics.ipfs_node_status === 'Online' ? 'success' : 'danger' },
-    { label: 'Backend/API', status: metrics.backend_status, color: metrics.backend_status === 'Healthy' ? 'success' : 'danger' },
-    { label: 'Queue (Celery/Redis)', status: metrics.queue_status, color: metrics.queue_status === 'Idle' ? 'primary' : 'warning' },
-  ];
-  const userStats = [
-    { label: 'Total Users', value: metrics.total_users },
-    { label: 'Issuers', value: metrics.issuers },
-    { label: 'Certificates', value: metrics.total_certificates },
-    { label: 'Active Sessions', value: metrics.active_sessions },
-  ];
 
   return (
     <>
@@ -96,6 +93,36 @@ const Dashboard = () => {
         </EuiTitle>
       </EuiPageHeader>
       <EuiPageTemplate>
+        <EuiSpacer size="l" />
+        <div style={{ marginLeft: '2rem' }}>
+          <EuiFlexGrid columns={3} gutterSize="l">
+            <EuiFlexItem>
+              <EuiStat
+                title={metrics?.total_certificates ?? 0}
+                description="Total Certificates"
+              />
+            </EuiFlexItem>
+            <EuiFlexItem>
+              <EuiStat
+                title={metrics?.onchain_certificates ?? 0}
+                description="On-chain Certificates"
+              />
+            </EuiFlexItem>
+            <EuiFlexItem>
+              <EuiStat
+                title={metrics?.offchain_certificates ?? 0}
+                description="Off-chain Certificates"
+              />
+            </EuiFlexItem>
+            <EuiFlexItem>
+              <EuiStat
+                title={metrics?.total_gas_spent ?? 0}
+                description="Total Gas Spent"
+              />
+            </EuiFlexItem>
+          </EuiFlexGrid>
+        </div>
+        <EuiSpacer size="l" />
         {/* Trade-Off Metrics Overview */}
         <EuiPanel paddingSize="l">
           <EuiTitle size="s"><h2>Trade-Off Metrics Overview</h2></EuiTitle>
