@@ -296,130 +296,116 @@ def list_certificates(request):
 @router.get("/dashboard/metrics", response=DashboardMetrics)
 def dashboard_metrics(request):
     contract = manager.get_contract()
-    onchain = 0
-    offchain = 0
-    total_certificates = 0
-    recent_registrations = 0
-    recent_registrations_details = []
     try:
-        if contract is not None:
-            # Fetch CertificateRegistered events
-            reg_events = contract.events.CertificateRegistered().get_logs(fromBlock=0)
-            onchain = len(reg_events)
-            offchain = 0
-            for event in reg_events:
-                metadata = event.args.metadata
-                if isinstance(metadata, str) and len(metadata) >= 46 and metadata.startswith("Qm"):
-                    offchain += 1
-            total_certificates = onchain
-            # Fetch CertificateRevoked events if available
-            try:
-                rev_events = contract.events.CertificateRevoked().get_logs(fromBlock=0)
-            except Exception:
-                rev_events = []
-            # Combine all events for recent operations
-            all_events = []
-            for event in reg_events:
-                all_events.append({
-                    "event": "CertificateRegistered",
-                    "blockNumber": getattr(event, 'blockNumber', 0),
-                    "actor": getattr(event.args, 'issuer', 'unknown') if hasattr(event.args, 'issuer') else 'unknown',
-                    "operation": "Issued Certificate",
-                    "type": "On-chain",
-                    "event_obj": event
-                })
-            for event in rev_events:
-                all_events.append({
-                    "event": "CertificateRevoked",
-                    "blockNumber": getattr(event, 'blockNumber', 0),
-                    "actor": getattr(event.args, 'issuer', 'unknown') if hasattr(event.args, 'issuer') else 'unknown',
-                    "operation": "Revoked Certificate",
-                    "type": "On-chain",
-                    "event_obj": event
-                })
-            # Sort all events by blockNumber descending
-            all_events_sorted = sorted(all_events, key=lambda e: e['blockNumber'], reverse=True)
-            # Prepare recent_registrations and recent_operations
-            recent_registrations = min(8, len([e for e in all_events_sorted if e['event'] == 'CertificateRegistered']))
-            recent_operations = []
-            for e in all_events_sorted:
-                block_number = e['blockNumber']
-                timestamp = None
-                if block_number is not None:
-                    try:
-                        block = manager.web3.eth.get_block(block_number)
-                        timestamp = datetime.datetime.fromtimestamp(block.timestamp).isoformat()
-                    except Exception:
-                        timestamp = None
-                recent_operations.append({
-                    "timestamp": timestamp,
-                    "actor": e['actor'],
-                    "operation": e['operation'],
-                    "type": e['type'],
-                })
-    except Exception as e:
-        print(f"Error fetching certificate stats: {e}")
-        onchain = 0
-        offchain = 0
-        total_certificates = 0
-        recent_registrations = 0
+        reg_events = contract.events.CertificateRegistered().get_logs(fromBlock=0) if contract else []
+        rev_events = contract.events.CertificateRevoked().get_logs(fromBlock=0) if contract else []
+        onchain = len(reg_events)
+        offchain = sum(1 for e in reg_events if isinstance(e.args.metadata, str) and len(e.args.metadata) >= 46 and e.args.metadata.startswith("Qm"))
+        total_certificates = onchain
+        all_events = [
+            {
+                "event": "CertificateRegistered",
+                "blockNumber": getattr(e, 'blockNumber', 0),
+                "actor": getattr(e.args, 'issuer', 'unknown'),
+                "operation": "Issued Certificate",
+                "type": "On-chain",
+            } for e in reg_events
+        ] + [
+            {
+                "event": "CertificateRevoked",
+                "blockNumber": getattr(e, 'blockNumber', 0),
+                "actor": getattr(e.args, 'issuer', 'unknown'),
+                "operation": "Revoked Certificate",
+                "type": "On-chain",
+            } for e in rev_events
+        ]
+        all_events_sorted = sorted(all_events, key=lambda e: e['blockNumber'], reverse=True)
+        recent_registrations = min(8, sum(1 for e in all_events_sorted if e['event'] == 'CertificateRegistered'))
         recent_operations = []
-    # System activity (real data)
-    revocations = len([e for e in recent_operations if e['operation'] == 'Revoked Certificate'])
-    # For signature_verifications, nfts_minted, nfts_transferred, oracle_calls, try to get from contract if available, else set to 0
-    def get_contract_stat(func_name):
+        for e in all_events_sorted:
+            block_number = e['blockNumber']
+            try:
+                block = manager.web3.eth.get_block(block_number) if block_number else None
+                timestamp = datetime.datetime.fromtimestamp(block.timestamp).isoformat() if block else None
+            except Exception:
+                timestamp = None
+            recent_operations.append({
+                "timestamp": timestamp,
+                "actor": e['actor'],
+                "operation": e['operation'],
+                "type": e['type'],
+            })
+        revocations = sum(1 for e in recent_operations if e['operation'] == 'Revoked Certificate')
+        def get_contract_stat(func_name):
+            try:
+                func = getattr(contract.functions, func_name, None)
+                return func().call() if func else 0
+            except Exception:
+                return 0
+        signature_verifications = get_contract_stat("getSignatureVerifications")
+        nfts_minted = get_contract_stat("getNFTsMinted")
+        nfts_transferred = get_contract_stat("getNFTsTransferred")
+        oracle_calls = get_contract_stat("getOracleCalls")
         try:
-            func = getattr(contract.functions, func_name, None)
-            return func().call() if func else 0
+            blockchain_node_status = "Online" if manager.web3.is_connected() else "Offline"
         except Exception:
-            return 0
-
-    signature_verifications = get_contract_stat("getSignatureVerifications")
-    nfts_minted = get_contract_stat("getNFTsMinted")
-    nfts_transferred = get_contract_stat("getNFTsTransferred")
-    oracle_calls = get_contract_stat("getOracleCalls")
-
-    try:
-        blockchain_node_status = "Online" if manager.web3.is_connected() else "Offline"
-    except Exception:
-        blockchain_node_status = "Unknown"
-
-    try:
-        with ipfshttpclient.connect(IPFS_API_URL) as client:
-            ipfs_node_status = "Online" if client.id() else "Offline"
-    except Exception:
-        ipfs_node_status = "Offline"
-    backend_status = "Healthy"  # If this endpoint works, backend is healthy
-    queue_status = "Idle"  # If you have a queue system, replace with real status
-    logs = []  # If you have logs, fetch from DB or file
-    # User/issuer stats (real data)
-    try:
-        User = get_user_model()
-        total_users = User.objects.count()
-        issuers = User.objects.filter(is_staff=True).count() if hasattr(User, 'is_staff') else 0
-        # Count active sessions using Django's session framework
-        active_sessions = Session.objects.filter(expire_date__gt=timezone.now()).count()
-    except Exception:
-        total_users = 0
-        issuers = 0
-        active_sessions = 0
-    return DashboardMetrics(
-        total_certificates=total_certificates,
-        onchain_certificates=onchain,
-        offchain_certificates=offchain,
-        recent_registrations=recent_registrations,
-        revocations=revocations,
-        signature_verifications=signature_verifications,
-        nfts_minted=nfts_minted,
-        nfts_transferred=nfts_transferred,
-        oracle_calls=oracle_calls,
-        blockchain_node_status=blockchain_node_status,
-        ipfs_node_status=ipfs_node_status,
-        backend_status=backend_status,
-        queue_status=queue_status,
-        recent_operations=recent_operations,
-        logs=logs,
-        total_users=total_users,
-        issuers=issuers,
-        active_sessions=active_sessions,
-    )
+            blockchain_node_status = "Unknown"
+        try:
+            with ipfshttpclient.connect(IPFS_API_URL) as client:
+                ipfs_node_status = "Online" if client.id() else "Offline"
+        except Exception:
+            ipfs_node_status = "Offline"
+        backend_status = "Healthy"
+        queue_status = "Idle"
+        logs = []
+        try:
+            User = get_user_model()
+            total_users = User.objects.count()
+            issuers = User.objects.filter(is_staff=True).count() if hasattr(User, 'is_staff') else 0
+            active_sessions = Session.objects.filter(expire_date__gt=timezone.now()).count()
+        except Exception:
+            total_users = 0
+            issuers = 0
+            active_sessions = 0
+        return DashboardMetrics(
+            total_certificates=total_certificates,
+            onchain_certificates=onchain,
+            offchain_certificates=offchain,
+            recent_registrations=recent_registrations,
+            revocations=revocations,
+            signature_verifications=signature_verifications,
+            nfts_minted=nfts_minted,
+            nfts_transferred=nfts_transferred,
+            oracle_calls=oracle_calls,
+            blockchain_node_status=blockchain_node_status,
+            ipfs_node_status=ipfs_node_status,
+            backend_status=backend_status,
+            queue_status=queue_status,
+            recent_operations=recent_operations,
+            logs=logs,
+            total_users=total_users,
+            issuers=issuers,
+            active_sessions=active_sessions,
+        )
+    except Exception as e:
+        print(f"Error fetching dashboard metrics: {e}")
+        return DashboardMetrics(
+            total_certificates=0,
+            onchain_certificates=0,
+            offchain_certificates=0,
+            recent_registrations=0,
+            revocations=0,
+            signature_verifications=0,
+            nfts_minted=0,
+            nfts_transferred=0,
+            oracle_calls=0,
+            blockchain_node_status="Unknown",
+            ipfs_node_status="Unknown",
+            backend_status="Unknown",
+            queue_status="Unknown",
+            recent_operations=[],
+            logs=[],
+            total_users=0,
+            issuers=0,
+            active_sessions=0,
+        )
