@@ -98,9 +98,12 @@ class DashboardMetrics(Schema):
     recent_operations: list
     logs: list
     total_users: int
+    active_users: int
     issuers: int
+    verifiers: int
     active_sessions: int
     total_gas_spent: int | None = None
+    gas_balance: int | None = None
 
 
 @router.post("/register/", response=CertificateOut)
@@ -317,6 +320,7 @@ def dashboard_metrics(request):
     recent_registrations = 0
     total_gas_spent = 0
     cumulative_gas = 0
+    gas_balance = 0
     try:
         if contract is not None:
             # Fetch CertificateRegistered events
@@ -387,6 +391,11 @@ def dashboard_metrics(request):
                     "gas_used": gas_used,
                     "cumulative_gas": cumulative_gas if gas_used is not None else None,
                 })
+            # Get gas balance from the first account
+            try:
+                gas_balance = manager.web3.eth.get_balance(manager.web3.eth.accounts[0])
+            except Exception:
+                gas_balance = None
     except Exception as e:
         print(f"Error fetching certificate stats: {e}")
         onchain = 0
@@ -395,6 +404,7 @@ def dashboard_metrics(request):
         recent_registrations = 0
         recent_operations = []
         total_gas_spent = 0
+        gas_balance = 0
     # System activity (real data)
     revocations = len([e for e in recent_operations if e['operation'] == 'Revoked Certificate'])
     # For signature_verifications, nfts_minted, nfts_transferred, oracle_calls, try to get from contract if available, else set to 0
@@ -427,12 +437,30 @@ def dashboard_metrics(request):
     try:
         User = get_user_model()
         total_users = User.objects.count()
+        # Active users: unique user IDs with active sessions
+        session_keys = Session.objects.filter(expire_date__gt=timezone.now())
+        user_ids = set()
+        for session in session_keys:
+            data = session.get_decoded()
+            uid = data.get('_auth_user_id')
+            if uid:
+                user_ids.add(uid)
+        active_users = len(user_ids)
+        # Issuers: is_staff or group 'issuer'
         issuers = User.objects.filter(is_staff=True).count() if hasattr(User, 'is_staff') else 0
-        # Count active sessions using Django's session framework
-        active_sessions = Session.objects.filter(expire_date__gt=timezone.now()).count()
+        # Verifiers: group 'verifier' or boolean field
+        try:
+            from django.contrib.auth.models import Group
+            verifier_group = Group.objects.get(name='verifier')
+            verifiers = verifier_group.user_set.count()
+        except Exception:
+            verifiers = User.objects.filter(is_verifier=True).count() if hasattr(User, 'is_verifier') else 0
+        active_sessions = session_keys.count()
     except Exception:
         total_users = 0
+        active_users = 0
         issuers = 0
+        verifiers = 0
         active_sessions = 0
     return DashboardMetrics(
         total_certificates=total_certificates,
@@ -451,7 +479,10 @@ def dashboard_metrics(request):
         recent_operations=recent_operations,
         logs=logs,
         total_users=total_users,
+        active_users=active_users,
         issuers=issuers,
+        verifiers=verifiers,
         active_sessions=active_sessions,
         total_gas_spent=total_gas_spent,
+        gas_balance=gas_balance,
     )

@@ -120,6 +120,12 @@ const Dashboard = () => {
                 description="Total Gas Spent"
               />
             </EuiFlexItem>
+            <EuiFlexItem>
+              <EuiStat
+                title={metrics?.gas_balance ?? 0}
+                description="Gas Balance"
+              />
+            </EuiFlexItem>
           </EuiFlexGrid>
         </div>
         <EuiSpacer size="l" />

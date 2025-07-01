@@ -33,5 +33,4 @@ RUN chmod +x /code/entrypoint.sh
 
 USER 1001
 
-# Remove contract watcher from CMD, restore original Django startup
-CMD sh -c "python3 manage.py migrate && python3 -m daphne -b 0.0.0.0 app.asgi:application --port 8000"
+CMD sh -c "/code/entrypoint.sh"
