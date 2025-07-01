@@ -12,8 +12,8 @@ from pydantic import BaseModel
 import hashlib
 from PyPDF2 import PdfReader
 from ninja.files import UploadedFile
-from app.api import SEEDWeb3
-from app.api.contract_manager import ContractManager
+from app.api.smartcontract import SEEDWeb3
+from app.api.smartcontract.contract_manager import ContractManager
 from django.http import HttpResponse
 from django.contrib.sessions.models import Session
 from django.utils import timezone
@@ -321,6 +321,7 @@ def dashboard_metrics(request):
     total_gas_spent = 0
     cumulative_gas = 0
     gas_balance = 0
+    recent_operations = []
     try:
         if contract is not None:
             # Fetch CertificateRegistered events
@@ -361,7 +362,7 @@ def dashboard_metrics(request):
             all_events_sorted = sorted(all_events, key=lambda e: e['blockNumber'], reverse=True)
             # Prepare recent_registrations and recent_operations
             recent_registrations = min(8, len([e for e in all_events_sorted if e['event'] == 'CertificateRegistered']))
-            recent_operations = []
+
             for e in all_events_sorted:
                 block_number = e['blockNumber']
                 timestamp = None

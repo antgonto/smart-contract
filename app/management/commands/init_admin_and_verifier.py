@@ -11,7 +11,7 @@ class Command(BaseCommand):
         password = 'admin'
         email = 'admin@example.com'
         group_name = 'verifier'
-
+        print()
         # Create superuser if not exists
         if not User.objects.filter(username=username).exists():
             user = User.objects.create_superuser(username=username, password=password, email=email)

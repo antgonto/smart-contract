@@ -1,7 +1,8 @@
 import os
 import json
 from web3 import Web3
-from app.api import SEEDWeb3
+from app.api.smartcontract import SEEDWeb3
+
 
 class ContractManager:
     _instance = None
@@ -13,12 +14,17 @@ class ContractManager:
             cls._instance.address = None
             cls._instance.contract = None
             cls._instance.abi_load_error = None
-            cls._instance.web3 = SEEDWeb3.connect_to_geth_poa("http://ganache:8545")
+            cls._instance.web3 = None  # Do not connect on instantiation
             cls._instance.contracts_dir = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "./../contracts")
+                os.path.join(os.path.dirname(__file__), "../../../contracts")
             )
             cls._instance.contract_name = "CertificateRegistry"
         return cls._instance
+
+    def connect_web3(self, url="http://ganache:8545"):
+        if self.web3 is None:
+            self.web3 = SEEDWeb3.connect_to_geth_poa(url)
+        return self.web3
 
     def load_abi(self, abi_path=None):
         if abi_path is None:

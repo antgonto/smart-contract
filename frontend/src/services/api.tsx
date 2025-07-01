@@ -4,7 +4,6 @@ const raw = process.env.REACT_APP_API_URL?.trim();
 const API_URL = raw && raw !== '' ? raw : 'http://localhost:8000';
 
 
-
 const api = axios.create({
   baseURL: API_URL,
   timeout: 10000,
@@ -13,9 +12,15 @@ const api = axios.create({
   },
 });
 
+export const walletService = {
+  getWalletBalance: (address: string) => api.get(`/smartcontracts/wallet/balance/${address}`),
+  createBackendWallet: () => api.post('/smartcontracts/wallet/create', {}),
+  sendBackendTransaction: (from_address: string, to_address: string, amount: number, private_key: string) =>
+      api.post('/smartcontracts/wallet/send', {from_address, to_address, amount, private_key}),
+}
 
 export const fetchDashboardMetrics = async () => {
-  const response = await api.get('/app/v1/smartcontracts/dashboard/metrics');
+  const response = await api.get('/app/v1/smartcontracts/smartcontract/dashboard/metrics');
   return response.data;
 };
 
@@ -23,23 +28,22 @@ export const registerCertificateFromPdf = async (file: File, recipient: string) 
   const formData = new FormData();
   formData.append('file', file);
   // recipient is sent as a query param
-  const response = await api.post(`/app/v1/smartcontracts/register/?recipient=${encodeURIComponent(recipient)}`, formData, {
+  const response = await api.post(`/app/v1/smartcontracts/smartcontract/register/?recipient=${encodeURIComponent(recipient)}`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return response.data;
 };
 
 export const fetchCertificates = async () => {
-  const response = await api.get('/app/v1/smartcontracts/list_certificates');
+  const response = await api.get('/app/v1/smartcontracts/smartcontract/list_certificates');
   return response.data;
 };
 
 export const downloadCertificateOffchain = async (ipfsHash: string) => {
-  const response = await api.get(`/app/v1/smartcontracts/download_offchain/${ipfsHash}`, {
+  const response = await api.get(`/app/v1/smartcontracts/smartcontract/download_offchain/${ipfsHash}`, {
     responseType: 'blob',
   });
   return response.data;
 };
 
-// Only one default export is allowed. Keep api as a named export if needed, or just use named exports for all functions.
-export { api };
+export default api;
