@@ -13,11 +13,11 @@ const api = axios.create({
 });
 
 export const walletService = {
-  getWalletBalance: (address: string) => api.get(`/smartcontracts/wallet/balance/${address}`),
-  createBackendWallet: () => api.post('/smartcontracts/wallet/create', {}),
-  sendBackendTransaction: (from_address: string, to_address: string, amount: number, private_key: string) =>
-      api.post('/smartcontracts/wallet/send', {from_address, to_address, amount, private_key}),
-}
+  balance: (address: string) => api.get(`/app/v1/smartcontracts/wallet/balance/${address}`),
+  create: () => api.post('/app/v1/smartcontracts/wallet/create', {}),
+  send: (from_address: string, to_address: string, amount: number, private_key: string) =>
+      api.post('/app/v1/smartcontracts/wallet/send', {from_address, to_address, amount, private_key}),
+};
 
 export const fetchDashboardMetrics = async () => {
   const response = await api.get('/app/v1/smartcontracts/smartcontract/dashboard/metrics');

@@ -5,13 +5,11 @@ import {
   EuiCard,
   EuiIcon,
   EuiSpacer,
-  EuiButton,
-  EuiText,
   EuiCallOut,
 } from '@elastic/eui';
 import axios from "axios";
 
-import img from './img.png';
+import { walletService } from '../services/api';
 
 const api = axios.create({
   baseURL: 'http://localhost:8000',
@@ -44,7 +42,7 @@ const actions = [
       url: null,
       successMsg: 'MetaMask connected successfully.',
       errorMsg: 'MetaMask connection failed: ',
-      customIcon: <img src={img} alt="MetaMask" style={{ width: 60, height: 60 }} />,
+      iconType: 'discoverApp',
     },
     // {
     //   id: 'execute-fill-tables',
@@ -120,6 +118,7 @@ const SettingsMenu: React.FC = () => {
   const [address, setAddress] = useState<string>('');
   const [isMetaMask, setIsMetaMask] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  const [success, setSuccess] = useState<string>('');
 
   const handleAction = async (action: typeof actions[0]) => {
     if (action.id === 'connect-metamask') {
@@ -160,6 +159,17 @@ const SettingsMenu: React.FC = () => {
     }
   };
 
+  const createWallet = async () => {
+    setError('');
+    setSuccess('');
+    try {
+      const res = await walletService.createWallet();
+      setSuccess('Create Wallet: ' + res.data.address);
+    } catch (err: any) {
+      setError('Wallet creation failed');
+    }
+  };
+
   const blankCount = GRID_SIZE - actions.length;
 
   return (
@@ -173,6 +183,11 @@ const SettingsMenu: React.FC = () => {
       {error && (
         <EuiCallOut title="Error" color="danger" iconType="alert">
           <p>{error}</p>
+        </EuiCallOut>
+      )}
+      {success && (
+        <EuiCallOut title="Success" color="success" iconType="check">
+          <p>{success}</p>
         </EuiCallOut>
       )}
       <EuiSpacer size="xl" />
