@@ -12,8 +12,8 @@ from pydantic import BaseModel
 import hashlib
 from PyPDF2 import PdfReader
 from ninja.files import UploadedFile
-from app.api import SEEDWeb3
-from app.api.contract_manager import ContractManager
+from app.api.smartcontract import SEEDWeb3
+from app.api.smartcontract.contract_manager import ContractManager
 from django.http import HttpResponse
 from django.contrib.sessions.models import Session
 from django.utils import timezone
@@ -39,6 +39,7 @@ class CertificateOut(BaseModel):
     recipient: str
     ipfs_hash: str
     created: str
+    gas_used: int | None = None
 
 
 class CertificateUploadIn(BaseModel):
@@ -73,6 +74,7 @@ class CertificateListItem(Schema):
     block_number: int | None = None
     transaction_hash: str | None = None
     log_index: int | None = None
+    gas_used: int | None = None
 
 
 class CertificateListResponse(Schema):
@@ -96,8 +98,12 @@ class DashboardMetrics(Schema):
     recent_operations: list
     logs: list
     total_users: int
+    active_users: int
     issuers: int
+    verifiers: int
     active_sessions: int
+    total_gas_spent: int | None = None
+    gas_balance: int | None = None
 
 
 @router.post("/register/", response=CertificateOut)
@@ -132,12 +138,15 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
     if not (isinstance(recipient, str) and recipient.startswith('0x') and len(recipient) == 42):
         raise HttpError(400, f"Recipient must be a valid Ethereum address (got: {recipient})")
     try:
-        contract.functions.registerCertificate(
+        tx_hash = contract.functions.registerCertificate(
             cert_hash_bytes,
             Web3.to_checksum_address(recipient),
             ipfs_hash,  # Store IPFS hash as metadata
             str(meta_dict),  # Optionally store metadata as content
         ).transact({"from": issuer})
+        # Get transaction receipt to fetch gas used
+        receipt = manager.web3.eth.get_transaction_receipt(tx_hash)
+        gas_used = receipt['gasUsed']
     except Exception as e:
         from web3.exceptions import ContractLogicError
         if isinstance(e, ContractLogicError) and "Certificate already exists" in str(e):
@@ -148,7 +157,8 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
         issuer=issuer,
         recipient=recipient,
         ipfs_hash=ipfs_hash,  # Return IPFS hash as metadata
-        created=str(metadata.creation_date)
+        created=str(metadata.creation_date),
+        gas_used=gas_used
     )
 
 
@@ -277,6 +287,13 @@ def list_certificates(request):
             block_number = getattr(event, 'blockNumber', None)
             transaction_hash = event.transactionHash.hex() if hasattr(event, 'transactionHash') else None
             log_index = getattr(event, 'logIndex', None)
+            gas_used = None
+            if transaction_hash:
+                try:
+                    receipt = manager.web3.eth.get_transaction_receipt(transaction_hash)
+                    gas_used = receipt['gasUsed']
+                except Exception:
+                    gas_used = None
             certificates.append({
                 "cert_hash": cert_hash,
                 "issuer": issuer,
@@ -287,6 +304,7 @@ def list_certificates(request):
                 "block_number": block_number,
                 "transaction_hash": transaction_hash,
                 "log_index": log_index,
+                "gas_used": gas_used,
             })
         return CertificateListResponse(certificates=certificates)
     except Exception as e:
@@ -300,6 +318,10 @@ def dashboard_metrics(request):
     offchain = 0
     total_certificates = 0
     recent_registrations = 0
+    total_gas_spent = 0
+    cumulative_gas = 0
+    gas_balance = 0
+    recent_operations = []
     try:
         if contract is not None:
             # Fetch CertificateRegistered events
@@ -340,22 +362,41 @@ def dashboard_metrics(request):
             all_events_sorted = sorted(all_events, key=lambda e: e['blockNumber'], reverse=True)
             # Prepare recent_registrations and recent_operations
             recent_registrations = min(8, len([e for e in all_events_sorted if e['event'] == 'CertificateRegistered']))
-            recent_operations = []
+
             for e in all_events_sorted:
                 block_number = e['blockNumber']
                 timestamp = None
+                gas_used = None
+                tx_hash = getattr(e['event_obj'], 'transactionHash', None)
                 if block_number is not None:
                     try:
                         block = manager.web3.eth.get_block(block_number)
                         timestamp = datetime.datetime.fromtimestamp(block.timestamp).isoformat()
                     except Exception:
                         timestamp = None
+                if tx_hash is not None:
+                    try:
+                        receipt = manager.web3.eth.get_transaction_receipt(tx_hash.hex() if hasattr(tx_hash, 'hex') else tx_hash)
+                        gas_used = receipt['gasUsed']
+                        total_gas_spent += gas_used
+                    except Exception:
+                        gas_used = None
+                # Calculate cumulative gas
+                if gas_used is not None:
+                    cumulative_gas += gas_used
                 recent_operations.append({
                     "timestamp": timestamp,
                     "actor": e['actor'],
                     "operation": e['operation'],
                     "type": e['type'],
+                    "gas_used": gas_used,
+                    "cumulative_gas": cumulative_gas if gas_used is not None else None,
                 })
+            # Get gas balance from the first account
+            try:
+                gas_balance = manager.web3.eth.get_balance(manager.web3.eth.accounts[0])
+            except Exception:
+                gas_balance = None
     except Exception as e:
         print(f"Error fetching certificate stats: {e}")
         onchain = 0
@@ -363,6 +404,8 @@ def dashboard_metrics(request):
         total_certificates = 0
         recent_registrations = 0
         recent_operations = []
+        total_gas_spent = 0
+        gas_balance = 0
     # System activity (real data)
     revocations = len([e for e in recent_operations if e['operation'] == 'Revoked Certificate'])
     # For signature_verifications, nfts_minted, nfts_transferred, oracle_calls, try to get from contract if available, else set to 0
@@ -395,12 +438,30 @@ def dashboard_metrics(request):
     try:
         User = get_user_model()
         total_users = User.objects.count()
+        # Active users: unique user IDs with active sessions
+        session_keys = Session.objects.filter(expire_date__gt=timezone.now())
+        user_ids = set()
+        for session in session_keys:
+            data = session.get_decoded()
+            uid = data.get('_auth_user_id')
+            if uid:
+                user_ids.add(uid)
+        active_users = len(user_ids)
+        # Issuers: is_staff or group 'issuer'
         issuers = User.objects.filter(is_staff=True).count() if hasattr(User, 'is_staff') else 0
-        # Count active sessions using Django's session framework
-        active_sessions = Session.objects.filter(expire_date__gt=timezone.now()).count()
+        # Verifiers: group 'verifier' or boolean field
+        try:
+            from django.contrib.auth.models import Group
+            verifier_group = Group.objects.get(name='verifier')
+            verifiers = verifier_group.user_set.count()
+        except Exception:
+            verifiers = User.objects.filter(is_verifier=True).count() if hasattr(User, 'is_verifier') else 0
+        active_sessions = session_keys.count()
     except Exception:
         total_users = 0
+        active_users = 0
         issuers = 0
+        verifiers = 0
         active_sessions = 0
     return DashboardMetrics(
         total_certificates=total_certificates,
@@ -419,6 +480,10 @@ def dashboard_metrics(request):
         recent_operations=recent_operations,
         logs=logs,
         total_users=total_users,
+        active_users=active_users,
         issuers=issuers,
+        verifiers=verifiers,
         active_sessions=active_sessions,
+        total_gas_spent=total_gas_spent,
+        gas_balance=gas_balance,
     )

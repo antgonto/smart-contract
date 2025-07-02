@@ -1,7 +1,5 @@
-from django.http import HttpResponse
 from ninja import NinjaAPI, Swagger
 
-from app.api.smartcontract import router as smartcontract_router
 
 api = NinjaAPI(
     title="Contracts API",
@@ -18,7 +16,8 @@ api = NinjaAPI(
 
 # Only add routers if they haven't been added already
 routers = [
-    ("/", smartcontract_router, ["SmartContract"]),
+    ("/smartcontract/", "app.api.smartcontract.router.router", ["smartcontract"]),
+    ("/wallet/", "app.api.wallet.router.router", ["wallet"]),
 ]
 
 # Track which routers have been added
@@ -35,7 +34,3 @@ for path, router, tags in routers:
             if "has already been attached" not in str(e):
                 # Re-raise if it's a different error
                 raise
-
-
-def root_view(request):
-    return HttpResponse("OK: Django root is alive.")

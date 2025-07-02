@@ -15,6 +15,7 @@ import Dashboard from './pages/Dashboard';
 import SettingsMenu from "./pages/SettingsMenu";
 import RegisterCertificate from "./pages/RegisterCertificate";
 import CertificatesList from "./pages/CertificatesList";
+import Wallet from './pages/Wallet';
 
 function App() {
   return (
@@ -35,10 +36,11 @@ function App() {
                 {/*<Route path="/alerts" element={<AlertsPage />} />*/}
                 {/*<Route path="/incidents" element={<IncidentsPage />} />*/}
                 {/*<Route path="/threat_intelligence" element={<ThreatIntelligenceList />} />*/}
-                {/*<Route path="/dashboard" element={<IncidentDashboard />} />*/}
+                <Route path="/wallet" element={<Wallet />} />
                 <Route path="/register-certificate" element={<RegisterCertificate />} />
                 <Route path="/settings" element={<SettingsMenu />} />
                 <Route path="/certificates" element={<CertificatesList />} />
+                <Route path="/wallet" element={<Wallet />} />
                 {/* Additional routes can be added here */}
               </Routes>
             </EuiFlexItem>

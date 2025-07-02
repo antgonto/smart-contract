@@ -4,6 +4,11 @@ Below is a comprehensive, step‑by‑step tutorial to deploy the certificate‑
 
 ---
 
+python manage.py createsuperuser
+Username: admin
+Password: admin
+
+
 ## Prerequisites
 
 1. **GCP Account & Project**

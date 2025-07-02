@@ -44,7 +44,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.admin",
-    "app.api.apps.APIConfig",
     "app",
 ]
 
@@ -116,13 +115,28 @@ WSGI_APPLICATION = "app.wsgi.application"
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": f"redis://{SETTINGS.REDIS_PASSWORD}@redis:{SETTINGS.REDIS_PORT}/1",
-        "TIMEOUT": 300,
+# Use Redis if environment variables are set in environment.py, otherwise fallback to local memory cache
+redis_password = getattr(SETTINGS, 'REDIS_PASSWORD', '')
+redis_port = getattr(SETTINGS, 'REDIS_PORT', '6379')
+
+# Only use Redis if both are set and not empty/blank, and only if not running in a build/migration context
+USE_REDIS_CACHE = redis_password and redis_port and not os.environ.get('DISABLE_REDIS_CACHE', '')
+
+if USE_REDIS_CACHE:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": f"redis://{redis_password}@redis:{redis_port}/1",
+            "TIMEOUT": 300,
+        }
     }
-}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "unique-snowflake",
+        }
+    }
 
 DATABASES = {
     "default": {
@@ -150,6 +164,8 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# Only keep the string reference for AUTH_USER_MODEL
+AUTH_USER_MODEL = 'app.CustomUser'
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/

@@ -5,7 +5,8 @@ import {
   EuiSpacer,
   EuiFlexGroup,
   EuiFlexItem,
-  EuiText
+  EuiText,
+  EuiButton
 } from '@elastic/eui';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -31,25 +32,32 @@ const Sidebar = () => {
         },
         {
           id: '2',
-          name: 'Settings',
-          onClick: () => navigate('/settings'),
-          isSelected: location.pathname === '/settings',
-          icon: <EuiIcon type="gear" />,
-        },
-        {
-          id: '3',
           name: 'Register Certificate',
           onClick: () => navigate('/register-certificate'),
           isSelected: location.pathname === '/register-certificate',
           icon: <EuiIcon type="document" />,
         },
         {
-          id: '4',
+          id: '3',
           name: 'Certificates',
           onClick: () => navigate('/certificates'),
           isSelected: location.pathname === '/certificates',
           icon: <EuiIcon type="indexOpen" />,
-        }
+        },
+        {
+          id: '4',
+          name: 'Transactions',
+          onClick: () => navigate('/wallet'),
+          isSelected: location.pathname === '/wallet',
+          icon: <EuiIcon type="currency" />,
+        },
+        {
+          id: '5',
+          name: 'Settings',
+          onClick: () => navigate('/settings'),
+          isSelected: location.pathname === '/settings',
+          icon: <EuiIcon type="gear" />,
+        },
       ]
     }
   ];
