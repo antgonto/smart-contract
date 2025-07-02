@@ -55,6 +55,7 @@ const Wallet: React.FC = () => {
   const [amount, setAmount] = useState('');
   const [isMetaMask, setIsMetaMask] = useState(false);
   const [selectedNetwork, setSelectedNetwork] = useState('mainnet');
+  const [fundTxHash, setFundTxHash] = useState('');
 
   const networks = [
     { id: 'mainnet', name: 'Ethereum Mainnet', chainId: '0x1' },
@@ -65,13 +66,15 @@ const Wallet: React.FC = () => {
   ];
 
   const handleCreateWallet = async () => {
-    setError(''); setSuccess('');
+    setError(''); setSuccess(''); setFundTxHash('');
     try {
       const res = await walletService.create();
-      setSuccess(actions[0].successMsg + res.data.address);
-      setAddress(res.data.address);
-    } catch {
-      setError(actions[0].errorMsg);
+      if (res.data.address) setAddress(res.data.address);
+      if (res.data.fund_tx_hash) setFundTxHash(res.data.fund_tx_hash);
+      if (res.data.error) setError(res.data.error);
+      else setSuccess(actions[0].successMsg + res.data.address);
+    } catch (err: any) {
+      setError(actions[0].errorMsg + (err?.message || ''));
     }
   };
 
@@ -200,6 +203,9 @@ const Wallet: React.FC = () => {
       </div>
       {address && (
         <EuiCallOut title="Connected Address" color="primary"><p>{address}</p></EuiCallOut>
+      )}
+      {fundTxHash && (
+        <EuiCallOut title="Funding Transaction Hash" color="success"><p>{fundTxHash}</p></EuiCallOut>
       )}
       {balance && (
         <EuiCallOut title="Balance" color="success"><p>{balance} ETH</p></EuiCallOut>
