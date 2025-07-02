@@ -14,7 +14,7 @@ const api = axios.create({
 
 export const walletService = {
   balance: (address: string) => api.get(`/app/v1/smartcontracts/wallet/balance/${address}`),
-  create: () => api.post('/app/v1/smartcontracts/wallet/create', {}),
+  create: (data: { network: string }) => api.post('/app/v1/smartcontracts/wallet/create', data),
   send: (from_address: string, to_address: string, amount: number, private_key: string) =>
       api.post('/app/v1/smartcontracts/wallet/send', {from_address, to_address, amount, private_key}),
 };

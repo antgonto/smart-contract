@@ -14,6 +14,7 @@ services:
       WEB3_RPC:               ${WEB3_RPC}
       CHAIN_ID:               ${CHAIN_ID}
       IPFS_API:               ${IPFS_API}
+      IPFS_4001_PORT:         4001
     volumes:
       - .:/code
     ports:

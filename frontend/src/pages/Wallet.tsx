@@ -68,7 +68,8 @@ const Wallet: React.FC = () => {
   const handleCreateWallet = async () => {
     setError(''); setSuccess(''); setFundTxHash('');
     try {
-      const res = await walletService.create();
+      // Pass the selected network to the backend
+      const res = await walletService.create({ network: selectedNetwork });
       if (res.data.address) setAddress(res.data.address);
       if (res.data.fund_tx_hash) setFundTxHash(res.data.fund_tx_hash);
       if (res.data.error) setError(res.data.error);
@@ -217,7 +218,7 @@ const Wallet: React.FC = () => {
         {actions.map(action => (
           <EuiFlexItem key={action.id} style={{ minHeight: 180 }}>
             <EuiCard
-              icon={action.customIcon || <EuiIcon type={action.iconType} size="xxl" />}
+              icon={<EuiIcon type={action.iconType} size="xxl" />}
               title={action.title}
               textAlign="center"
               paddingSize="l"
