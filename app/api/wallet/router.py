@@ -1,12 +1,20 @@
 from ninja import Router
-from eth_account import Account
+from eth_account import Account as EthAccount
 from web3 import Web3
 from django.conf import settings
-from typing import Dict
 import os
 from pydantic import BaseModel
+from mnemonic import Mnemonic
+from web3.middleware import geth_poa_middleware
 
-router = Router()
+import json
+from app.models import Account, Transaction
+from django.db import transaction as db_transaction
+
+router = Router(tags=["wallet"])
+
+# Enable unaudited HD wallet features for eth_account to allow mnemonic-based account creation.
+EthAccount.enable_unaudited_hdwallet_features()
 
 NETWORK_FUNDER_ENV_MAP = {
     'ganache': 'GANACHE_FUNDER_PRIVATE_KEY',
@@ -27,11 +35,11 @@ def derive_ganache_private_key_from_mnemonic():
         except Exception:
             mnemonic = None
     if mnemonic:
-        if hasattr(Account, 'enable_unaudited_hdwallet_features'):
-            Account.enable_unaudited_hdwallet_features()
-        if hasattr(Account, 'from_mnemonic'):
+        if hasattr(EthAccount, 'enable_unaudited_hdwallet_features'):
+            EthAccount.enable_unaudited_hdwallet_features()
+        if hasattr(EthAccount, 'from_mnemonic'):
             hd_path = "m/44'/60'/0'/0/0"
-            acct = Account.from_mnemonic(mnemonic, account_path=hd_path)
+            acct = EthAccount.from_mnemonic(mnemonic, account_path=hd_path)
             return acct.key.hex()
     return None
 
@@ -49,73 +57,196 @@ def get_funder_private_key(network: str):
             return pk
     return None
 
+# Helper to get the first Ganache account and private key
+GANACHE_ACCOUNTS_PATH = "/home/app/.ganache/accounts.json"
+def get_ganache_funder(w3):
+    try:
+        # Try to get accounts from Ganache RPC
+        accounts = w3.eth.accounts
+        if not accounts:
+            return None, None
+        # Try to load private keys from a known file (if available)
+        try:
+            with open(GANACHE_ACCOUNTS_PATH, 'r') as f:
+                accs = json.load(f)
+                for acc in accs:
+                    if acc['address'].lower() == accounts[0].lower():
+                        return accounts[0], acc['privateKey']
+        except Exception:
+            pass
+        # Fallback: just return the address, no private key
+        return accounts[0], None
+    except Exception:
+        return None, None
+
 class WalletCreateRequest(BaseModel):
-    network: str
+    wallet_name: str
+    network: str = 'sepolia'
 
-@router.post("/create", response={200: Dict[str, str], 400: Dict[str, str], 500: Dict[str, str]})
+class WalletCreateResponse(BaseModel):
+    address: str
+    private_key: str
+    mnemonic: str
+
+class WalletImportRequest(BaseModel):
+    mnemonic: str
+
+class WalletImportResponse(BaseModel):
+    address: str
+    private_key: str
+
+class WalletImportPrivateKeyRequest(BaseModel):
+    private_key: str
+
+class WalletImportPrivateKeyResponse(BaseModel):
+    address: str
+    private_key: str
+
+class WalletBalanceRequest(BaseModel):
+    address: str
+    rpc_url: str
+
+class WalletBalanceResponse(BaseModel):
+    address: str
+    balance: str
+
+class WalletAccountRequest(BaseModel):
+    wallet_private_key: str
+    rpc_url: str
+    num_accounts: int = 1
+    fund_amount_wei: int = 0
+
+class WalletAccountResponse(BaseModel):
+    accounts: list[str]
+    funded: bool
+    tx_hashes: list[str]
+
+class WalletListItem(BaseModel):
+    name: str
+    address: str
+    private_key: str
+    mnemonic: str | None = None
+
+@router.post("/create", response=WalletCreateResponse)
 def create_wallet(request, data: WalletCreateRequest):
-    network = data.network
-    funder_pk = get_funder_private_key(network)
-    if not funder_pk:
-        return 500, {"error": f"Funder private key for network '{network}' not found in environment or .env mnemonic."}
-    wallet = Account.create()
-    # Persist the address and private key in a txt file (for development/testing only!)
-    with open("wallet_addresses.txt", "a") as f:
-        f.write(f"{wallet.address},{wallet.key.hex()}\n")
-    # Create a Web3 instance for this request
-    w3 = Web3(Web3.HTTPProvider(getattr(settings, 'WEB3_PROVIDER', 'http://ganache:8545')))
-    try:
-        funder = w3.eth.account.from_key(funder_pk)
-        tx = {
-            'nonce': w3.eth.get_transaction_count(funder.address),
-            'to': wallet.address,
-            'value': w3.to_wei(10, 'ether'),  # Amount to fund
-            'gas': 21000,
-            'gasPrice': w3.to_wei('50', 'gwei'),
+    mnemo = Mnemonic("english")
+    mnemonic = mnemo.generate(strength=128)
+    acct = EthAccount.from_mnemonic(mnemonic, account_path="m/44'/60'/0'/0/0")
+    address = acct.address
+    private_key = acct.key.hex()
+    # Save to file in app/ folder
+    wallet_name = data.wallet_name.strip().replace(' ', '_')
+    app_dir = os.path.join(settings.BASE_DIR, "app")
+    os.makedirs(app_dir, exist_ok=True)
+    file_path = os.path.join(app_dir, f"wallet_{wallet_name}.txt")
+    with open(file_path, 'w') as f:
+        f.write(f"Address: {address}\nPrivate Key: {private_key}\nMnemonic: {mnemonic}\n")
+    # Persist to DB
+    Account.objects.get_or_create(
+        address=address,
+        defaults={
+            'name': wallet_name,
+            'private_key': private_key,
+            'mnemonic': mnemonic,
         }
-        signed_tx = funder.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
-        return {"address": wallet.address, "fund_tx_hash": tx_hash.hex()}
+    )
+    return WalletCreateResponse(address=address, private_key=private_key, mnemonic=mnemonic)
+
+@router.post("/import", response=WalletImportResponse)
+def import_wallet(request, data: WalletImportRequest):
+    acct = EthAccount.from_mnemonic(data.mnemonic, account_path="m/44'/60'/0'/0/0")
+    return WalletImportResponse(address=acct.address, private_key=acct.key.hex())
+
+@router.post("/import_private_key", response=WalletImportPrivateKeyResponse)
+def import_wallet_private_key(request, data: WalletImportPrivateKeyRequest):
+    pk = data.private_key
+    if not pk.startswith('0x'):
+        pk = '0x' + pk
+    acct = Account.from_key(pk)
+    return WalletImportPrivateKeyResponse(address=acct.address, private_key=pk)
+
+@router.post("/balance", response=WalletBalanceResponse)
+def get_balance(request, data: WalletBalanceRequest):
+    try:
+        w3 = Web3(Web3.HTTPProvider(data.rpc_url, request_kwargs={'timeout': 30}))
+        balance = w3.eth.get_balance(data.address)
+        return WalletBalanceResponse(address=data.address, balance=str(balance))
     except Exception as e:
-        return 500, {"error": f"Wallet created but funding failed: {str(e)}", "address": wallet.address}
+        return WalletBalanceResponse(address=data.address, balance=f"Error: {str(e)}")
 
-@router.get("/balance/{address}", response={200: Dict[str, str], 400: Dict[str, str]})
-def get_balance(request, address: str):
-    w3 = Web3(Web3.HTTPProvider(getattr(settings, 'WEB3_PROVIDER', 'http://ganache:8545')))
-    try:
-        checksum_address = w3.to_checksum_address(address)
-    except Exception:
-        return 400, {"error": "Invalid address format"}
-    balance = w3.eth.get_balance(checksum_address)
-    eth_balance = w3.from_wei(balance, 'ether')
-    return {"address": address, "balance": str(eth_balance)}
+@router.post("/generate_accounts", response=WalletAccountResponse)
+def generate_accounts_and_fund(request, data: WalletAccountRequest):
+    w3 = Web3(Web3.HTTPProvider(data.rpc_url, request_kwargs={'timeout': 30}))
+    w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+    funder_private_key = data.wallet_private_key
+    if not funder_private_key:
+        _, funder_private_key = get_ganache_funder(w3)
+        if not funder_private_key:
+            return WalletAccountResponse(accounts=[], funded=False, tx_hashes=[])
+    funder = w3.eth.account.from_key(funder_private_key)
+    accounts = []
+    tx_hashes = []
+    funded = False
+    with db_transaction.atomic():
+        for idx in range(data.num_accounts):
+            acct = w3.eth.account.create()
+            accounts.append(acct.address)
+            db_account, _ = Account.objects.get_or_create(
+                address=acct.address,
+                defaults={
+                    'name': f'Generated Account {acct.address[:8]}',
+                    'private_key': acct.key.hex(),
+                    'mnemonic': None,
+                }
+            )
+            if data.fund_amount_wei > 0:
+                tx = {
+                    'to': acct.address,
+                    'value': data.fund_amount_wei,
+                    'gas': 21000,
+                    'gasPrice': w3.eth.gas_price,
+                    'nonce': w3.eth.get_transaction_count(funder.address),
+                    'chainId': w3.eth.chain_id
+                }
+                signed_tx = funder.sign_transaction(tx)
+                tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+                tx_hashes.append(tx_hash.hex())
+                funded = True
+                # Persist transaction
+                Transaction.objects.create(
+                    account=db_account,
+                    tx_hash=tx_hash.hex(),
+                    to_address=acct.address,
+                    amount=data.fund_amount_wei,
+                    status='pending',
+                )
+    return WalletAccountResponse(accounts=accounts, funded=funded, tx_hashes=tx_hashes)
 
-# Placeholder for sending transaction (requires authentication and private key management)
-@router.post("/send", response={200: Dict[str, str], 400: Dict[str, str]})
-def send_transaction(request, from_address: str, to_address: str, amount: float, network: str):
-    w3 = Web3(Web3.HTTPProvider(getattr(settings, 'WEB3_PROVIDER', 'http://ganache:8545')))
-    try:
-        checksum_from = w3.to_checksum_address(from_address)
-        checksum_to = w3.to_checksum_address(to_address)
-    except Exception:
-        return 400, {"error": "Invalid address format"}
-    funder_pk = get_funder_private_key(network)
-    if not funder_pk:
-        return 400, {"error": f"Funder private key for network '{network}' not found in environment or .env mnemonic."}
-    try:
-        nonce = w3.eth.get_transaction_count(checksum_from)
-        tx = {
-            'nonce': nonce,
-            'to': checksum_to,
-            'value': w3.to_wei(amount, 'ether'),
-            'gas': 21000,
-            'gasPrice': w3.to_wei('50', 'gwei'),
-        }
-        signed_tx = w3.eth.account.sign_transaction(tx, funder_pk)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
-        return {"tx_hash": tx_hash.hex()}
-    except Exception as e:
-        return 400, {"error": str(e)}
-
-# Ensure router is exported for Django Ninja
-__all__ = ["router"]
+@router.get("/list", response=list[WalletListItem])
+def list_wallets(request):
+    # Return all accounts from the database, including their latest balance and transactions
+    from web3 import Web3
+    rpc_url = request.GET.get('rpc_url')
+    w3 = None
+    if rpc_url:
+        w3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={'timeout': 30}))
+    accounts = Account.objects.all()
+    wallets = []
+    for acc in accounts:
+        balance = None
+        if w3:
+            try:
+                balance = str(w3.eth.get_balance(acc.address))
+            except Exception:
+                balance = None
+        txs = list(acc.transactions.values('tx_hash', 'to_address', 'amount', 'timestamp', 'status'))
+        wallets.append({
+            'name': acc.name,
+            'address': acc.address,
+            'private_key': acc.private_key,
+            'mnemonic': acc.mnemonic,
+            'created_at': acc.created_at,
+            'balance': balance,
+            'transactions': txs
+        })
+    return wallets

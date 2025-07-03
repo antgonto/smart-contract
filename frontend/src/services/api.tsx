@@ -46,4 +46,12 @@ export const downloadCertificateOffchain = async (ipfsHash: string) => {
   return response.data;
 };
 
+export const persistAccount = async (account: any) => {
+  return api.post('/api/accounts/', account);
+};
+
+export const persistTransaction = async (transaction: any) => {
+  return api.post('/api/transactions/', transaction);
+};
+
 export default api;
