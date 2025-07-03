@@ -39,20 +39,28 @@ const Wallet: React.FC = () => {
   const [backendAccounts, setBackendAccounts] = useState<any[]>([]);
   const [selectedBackendAccountIdx, setSelectedBackendAccountIdx] = useState(0);
 
+  // Wallet selection dropdown and account radio button list
+  const [wallets, setWallets] = useState<any[]>([]); // List of wallets
+  const [selectedWalletId, setSelectedWalletId] = useState<string | null>(null);
+  const [walletAccounts, setWalletAccounts] = useState<any[]>([]); // Accounts for selected wallet
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+
+  // Move fetchBalances to top-level so it can be called anywhere
+  const fetchBalances = async () => {
+    if (accounts.length === 0) { setAccountBalances([]); return; }
+    const balances = await Promise.all(accounts.map(async acc => {
+      try {
+        const res = await getBalance(acc.address, rpcUrl);
+        return res.balance;
+      } catch {
+        return 'Error';
+      }
+    }));
+    setAccountBalances(balances);
+  };
+
   // Fetch balances for all accounts when accounts or rpcUrl changes
   useEffect(() => {
-    async function fetchBalances() {
-      if (accounts.length === 0) { setAccountBalances([]); return; }
-      const balances = await Promise.all(accounts.map(async acc => {
-        try {
-          const res = await getBalance(acc.address, rpcUrl);
-          return res.balance;
-        } catch {
-          return 'Error';
-        }
-      }));
-      setAccountBalances(balances);
-    }
     fetchBalances();
   }, [accounts, rpcUrl]);
 
@@ -71,6 +79,91 @@ const Wallet: React.FC = () => {
     fetchWallets();
   }, []);
 
+  // Fetch wallets on mount
+  useEffect(() => {
+    async function fetchWalletsList() {
+      try {
+        // Replace with your backend call to list wallets
+        const walletsList = await listWallets();
+        setWallets(walletsList);
+        if (walletsList.length > 0) setSelectedWalletId(walletsList[0].id || walletsList[0]._id || walletsList[0].address);
+      } catch (e) {
+        setError('Failed to load wallets');
+      }
+    }
+    fetchWalletsList();
+  }, []);
+
+  // Fetch accounts for selected wallet
+  useEffect(() => {
+    async function fetchAccountsForWallet() {
+      if (!selectedWalletId) return;
+      try {
+        // Replace with your backend call to list accounts for a wallet
+        const res = await fetch(`/api/wallet/account/list?wallet_id=${selectedWalletId}`);
+        if (!res.ok) throw new Error('Failed to fetch accounts');
+        const accounts = await res.json();
+        setWalletAccounts(accounts);
+        if (accounts.length > 0) setSelectedAccountId(accounts[0].address);
+      } catch (e) {
+        setError('Failed to load accounts for wallet');
+      }
+    }
+    fetchAccountsForWallet();
+  }, [selectedWalletId]);
+
+  // Fetch balance for selected account
+  useEffect(() => {
+    async function fetchSelectedAccountBalance() {
+      if (!selectedAccountId) { setBalance(''); return; }
+      try {
+        const res = await fetch(`/api/wallet/account/balance?address=${selectedAccountId}&rpc_url=${rpcUrl}`);
+        if (!res.ok) throw new Error('Failed to fetch balance');
+        const bal = await res.text();
+        setBalance((parseFloat(bal) / 1e18).toFixed(4) + ' ETH');
+      } catch (e) {
+        setBalance('Error');
+      }
+    }
+    fetchSelectedAccountBalance();
+  }, [selectedAccountId, rpcUrl]);
+
+  // Account addition modal state
+  const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
+  const [newAccountName, setNewAccountName] = useState('');
+  const [addAccountLoading, setAddAccountLoading] = useState(false);
+  const [addAccountError, setAddAccountError] = useState('');
+
+  // Handle add account
+  const handleAddAccount = async () => {
+    setAddAccountLoading(true);
+    setAddAccountError('');
+    try {
+      // Call backend to generate and fund a new account
+      const res = await fetch('/api/wallet/generate_accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          wallet_private_key: '', // backend will use Ganache funder if blank
+          rpc_url: rpcUrl,
+          num_accounts: 1,
+          fund_amount_wei: String(1e18), // 1 ETH, adjust as needed
+          name: newAccountName, // send user-defined name
+        })
+      });
+      if (!res.ok) throw new Error('Failed to create account');
+      setIsAddAccountModalOpen(false);
+      setNewAccountName('');
+      // Refresh accounts
+      const accountsRes = await fetch(`/api/wallet/account/list?wallet_id=${selectedWalletId}`);
+      setWalletAccounts(await accountsRes.json());
+    } catch (e: any) {
+      setAddAccountError(e.message || 'Failed to add account');
+    } finally {
+      setAddAccountLoading(false);
+    }
+  };
+
   // Helper to refresh backend accounts
   const refreshBackendAccounts = async () => {
     try {
@@ -87,7 +180,7 @@ const Wallet: React.FC = () => {
     if (!walletName) { setError('Please enter a wallet name.'); return; }
     try {
       const res = await createWallet(walletName);
-      const newAccount = { name: walletName, address: res.address, private_key: res.private_key, mnemonic: res.mnemonic };
+      const newAccount = { name: walletName, address: res.address, private_key: res.private_key, mnemonic: res.mnemonic, created_at: new Date().toISOString() };
       // Immediately update backendAccounts state so the new account appears without refresh
       setBackendAccounts(prev => [newAccount, ...prev]);
       const updatedAccounts = [...accounts, newAccount];
@@ -105,7 +198,7 @@ const Wallet: React.FC = () => {
     setError(''); setSuccess('');
     try {
       const res = await importWallet(importMnemonic);
-      const newAccount = { name: 'Imported (mnemonic)', address: res.address, privateKey: res.private_key, mnemonic: importMnemonic };
+      const newAccount = { name: 'Imported (mnemonic)', address: res.address, privateKey: res.private_key, mnemonic: importMnemonic, created_at: new Date().toISOString() };
       const updatedAccounts = [...accounts, newAccount];
       setAccounts(updatedAccounts);
       setSelectedAccountIdx(updatedAccounts.length - 1);
@@ -120,7 +213,7 @@ const Wallet: React.FC = () => {
     setError(''); setSuccess('');
     try {
       const res = await importWalletPrivateKey(importPrivKey);
-      const newAccount = { name: 'Imported (private key)', address: res.address, privateKey: res.private_key };
+      const newAccount = { name: 'Imported (private key)', address: res.address, privateKey: res.private_key, created_at: new Date().toISOString() };
       const updatedAccounts = [...accounts, newAccount];
       setAccounts(updatedAccounts);
       setSelectedAccountIdx(updatedAccounts.length - 1);
@@ -185,6 +278,7 @@ const Wallet: React.FC = () => {
           private_key: acc.privateKey,
           mnemonic: acc.mnemonic,
           name: acc.name || '',
+          created_at: new Date().toISOString(),
         });
       }
       // Persist transaction history
@@ -206,12 +300,16 @@ const Wallet: React.FC = () => {
 
   // Table columns for accounts
   const accountColumns = [
-    { field: 'name', name: 'Name' },
-    { field: 'address', name: 'Address' },
-    { field: 'balance', name: 'Balance (wei)' },
-    { field: 'private_key', name: 'Private Key' },
-    { field: 'mnemonic', name: 'Mnemonic' },
-    { field: 'created_at', name: 'Created At' },
+    { field: 'name', name: 'Name', width: '10%' },
+    { field: 'address', name: 'Address', width: '30%' },
+    { field: 'balance', name: 'Balance (ETH)', width: '15%',
+      render: (balance: string) => {
+        // Convert from wei to ETH (if not error)
+        if (!balance || isNaN(Number(balance))) return balance || '-';
+        return (Number(balance) / 1e18).toFixed(4);
+      }
+    },
+    { field: 'created_at', name: 'Created At', width: '15%' },
     {
       field: 'transactions',
       name: 'Transactions',
@@ -231,12 +329,131 @@ const Wallet: React.FC = () => {
     }
   ];
 
+  // Wallet selection dropdown UI
+  // Render wallet dropdown
+  const walletOptions = wallets.map(w => ({
+    value: w.id || w._id || w.address,
+    inputDisplay: w.name || w.address || w.id
+  }));
+
+  // Render account radio button list
+  const accountRadioOptions = walletAccounts.map(acc => ({
+    id: acc.address,
+    label: acc.name + ' (' + acc.address.slice(0, 8) + '...)',
+  }));
+
+  // --- Signing UI State ---
+  const [signingTab, setSigningTab] = useState<'tx' | 'msg'>('tx');
+  const [signTxData, setSignTxData] = useState('');
+  const [signMsg, setSignMsg] = useState('');
+  const [signResult, setSignResult] = useState<string | null>(null);
+  const [signLoading, setSignLoading] = useState(false);
+  const [signError, setSignError] = useState('');
+  const [authToken, setAuthToken] = useState(''); // You may want to get this from context or login
+
+  // --- Signing Handlers ---
+  const handleSignTransaction = async () => {
+    setSignLoading(true); setSignError(''); setSignResult(null);
+    try {
+      const tx = JSON.parse(signTxData);
+      const res = await import('../services/walletService').then(svc => svc.signTransaction(selectedAccountId!, tx, authToken));
+      setSignResult(JSON.stringify(res, null, 2));
+    } catch (e: any) {
+      setSignError(e.message || 'Failed to sign transaction. Ensure valid JSON and authentication.');
+    } finally {
+      setSignLoading(false);
+    }
+  };
+  const handleSignMessage = async () => {
+    setSignLoading(true); setSignError(''); setSignResult(null);
+    try {
+      const res = await import('../services/walletService').then(svc => svc.signMessage(selectedAccountId!, signMsg, authToken));
+      setSignResult(JSON.stringify(res, null, 2));
+    } catch (e: any) {
+      setSignError(e.message || 'Failed to sign message.');
+    } finally {
+      setSignLoading(false);
+    }
+  };
+
   return (
     <div style={{ maxWidth: 1400, margin: 'auto', padding: 20 }}>
       <EuiTitle size="l"><h2>Wallet Management</h2></EuiTitle>
       <EuiSpacer size="l" />
       {error && <EuiCallOut title="Error" color="danger" iconType="alert">{error}</EuiCallOut>}
       {success && <EuiCallOut title="Success" color="success" iconType="check">{success}</EuiCallOut>}
+      <EuiFormRow label="Select Wallet">
+        <select value={selectedWalletId || ''} onChange={e => setSelectedWalletId(e.target.value)}>
+          {walletOptions.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.inputDisplay}</option>
+          ))}
+        </select>
+      </EuiFormRow>
+      <EuiSpacer size="m" />
+      <EuiFormRow label="Accounts">
+        {walletAccounts.length > 0 ? (
+          <EuiRadioGroup
+            options={accountRadioOptions}
+            idSelected={selectedAccountId || ''}
+            onChange={id => setSelectedAccountId(id)}
+            name="accountRadios"
+          />
+        ) : <span>No accounts for this wallet.</span>}
+      </EuiFormRow>
+      <EuiButton size="s" style={{ marginTop: 8 }} onClick={() => setIsAddAccountModalOpen(true)}>
+        + Add Account
+      </EuiButton>
+      <EuiFormRow label="RPC URL">
+        <EuiFieldText value={rpcUrl} onChange={e => setRpcUrl(e.target.value)} />
+      </EuiFormRow>
+      <EuiSpacer size="m" />
+      {selectedAccountId && (
+        <EuiCallOut title="Selected Account Details" color="primary">
+          <div><b>Name:</b> {walletAccounts.find(a => a.address === selectedAccountId)?.name}</div>
+          <div><b>Address:</b> {selectedAccountId}</div>
+          <div><b>Balance:</b> {balance}</div>
+        </EuiCallOut>
+      )}
+      {/* Add Account Modal */}
+      {isAddAccountModalOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-content">
+            <EuiTitle size="s"><h3>Add New Account</h3></EuiTitle>
+            <EuiSpacer size="m" />
+            <div style={{ marginBottom: 16 }}>
+              <label htmlFor="newAccountName"><b>Account Name</b></label>
+              <EuiFieldText id="newAccountName" value={newAccountName} onChange={e => setNewAccountName(e.target.value)} />
+            </div>
+            {addAccountError && <EuiCallOut title="Error" color="danger">{addAccountError}</EuiCallOut>}
+            <EuiSpacer size="m" />
+            <EuiButton onClick={handleAddAccount} isLoading={addAccountLoading} fill>
+              Create & Fund Account
+            </EuiButton>
+            <EuiButton color="danger" onClick={() => setIsAddAccountModalOpen(false)} style={{ marginLeft: 8 }}>
+              Cancel
+            </EuiButton>
+          </div>
+        </div>
+      )}
+      {/* Wallet Creation and Import Section */}
+      <EuiCard title="Create or Import Wallet" layout="vertical">
+        <EuiForm component="form">
+          <EuiFormRow label="Wallet Name (for new wallet)">
+            <EuiFieldText value={walletName} onChange={e => setWalletName(e.target.value)} placeholder="Enter wallet name" />
+          </EuiFormRow>
+          <EuiButton fill onClick={handleCreate} isDisabled={!walletName}>Create Wallet</EuiButton>
+          <EuiSpacer size="m" />
+          <EuiFormRow label="Import Wallet by Mnemonic">
+            <EuiFieldText value={importMnemonic} onChange={e => setImportMnemonic(e.target.value)} placeholder="Enter mnemonic phrase" />
+          </EuiFormRow>
+          <EuiButton onClick={handleImportMnemonic} isDisabled={!importMnemonic}>Import by Mnemonic</EuiButton>
+          <EuiSpacer size="m" />
+          <EuiFormRow label="Import Wallet by Private Key">
+            <EuiFieldText value={importPrivKey} onChange={e => setImportPrivKey(e.target.value)} placeholder="Enter private key" />
+          </EuiFormRow>
+          <EuiButton onClick={handleImportPrivateKey} isDisabled={!importPrivKey}>Import by Private Key</EuiButton>
+        </EuiForm>
+      </EuiCard>
       <EuiSpacer size="m" />
       <EuiCard title="Your Accounts" layout="vertical">
         <EuiBasicTable
@@ -245,24 +462,6 @@ const Wallet: React.FC = () => {
           rowHeader="name"
         />
       </EuiCard>
-      <EuiSpacer size="l" />
-      {backendAccounts[selectedBackendAccountIdx] && (
-        <EuiCard
-          title="Selected Account Details"
-          description="Copy and store your credentials securely."
-          layout="vertical"
-        >
-          <EuiText><b>Address:</b> <EuiCopy textToCopy={backendAccounts[selectedBackendAccountIdx].address}>{(copy) => (<span style={{cursor:'pointer'}} onClick={copy}>{backendAccounts[selectedBackendAccountIdx].address}</span>)}</EuiCopy></EuiText>
-          <EuiText><b>Private Key:</b> <EuiCopy textToCopy={backendAccounts[selectedBackendAccountIdx].private_key}>{(copy) => (<span style={{cursor:'pointer'}} onClick={copy}>{backendAccounts[selectedBackendAccountIdx].private_key}</span>)}</EuiCopy></EuiText>
-          {backendAccounts[selectedBackendAccountIdx].mnemonic && <EuiText><b>Mnemonic:</b> <EuiCopy textToCopy={backendAccounts[selectedBackendAccountIdx].mnemonic}>{(copy) => (<span style={{cursor:'pointer'}} onClick={copy}>{backendAccounts[selectedBackendAccountIdx].mnemonic}</span>)}</EuiCopy></EuiText>}
-          <EuiSpacer size="m" />
-          <EuiFormRow label="RPC URL">
-            <EuiFieldText value={rpcUrl} onChange={e => setRpcUrl(e.target.value)} />
-          </EuiFormRow>
-          <EuiButton onClick={handleGetBalance} isDisabled={!backendAccounts[selectedBackendAccountIdx]}>Get Balance</EuiButton>
-          {balance && <EuiText><b>Balance (wei):</b> {balance}</EuiText>}
-        </EuiCard>
-      )}
       <EuiSpacer size="l" />
       <EuiCard title="Generate & Fund Accounts" layout="vertical">
         <EuiForm component="form">
@@ -288,28 +487,38 @@ const Wallet: React.FC = () => {
             ))}
           </>
         )}
+        <EuiSpacer size="l" />
       </EuiCard>
       <EuiSpacer size="l" />
-      {/* Wallet Creation and Import Section */}
-      <EuiCard title="Create or Import Wallet" layout="vertical">
-        <EuiForm component="form">
-          <EuiFormRow label="Wallet Name (for new wallet)">
-            <EuiFieldText value={walletName} onChange={e => setWalletName(e.target.value)} placeholder="Enter wallet name" />
-          </EuiFormRow>
-          <EuiButton fill onClick={handleCreate} isDisabled={!walletName}>Create Wallet</EuiButton>
-          <EuiSpacer size="m" />
-          <EuiFormRow label="Import Wallet by Mnemonic">
-            <EuiFieldText value={importMnemonic} onChange={e => setImportMnemonic(e.target.value)} placeholder="Enter mnemonic phrase" />
-          </EuiFormRow>
-          <EuiButton onClick={handleImportMnemonic} isDisabled={!importMnemonic}>Import by Mnemonic</EuiButton>
-          <EuiSpacer size="m" />
-          <EuiFormRow label="Import Wallet by Private Key">
-            <EuiFieldText value={importPrivKey} onChange={e => setImportPrivKey(e.target.value)} placeholder="Enter private key" />
-          </EuiFormRow>
-          <EuiButton onClick={handleImportPrivateKey} isDisabled={!importPrivKey}>Import by Private Key</EuiButton>
-        </EuiForm>
+      <EuiCard title="Sign Transaction / Message" layout="vertical">
+        <div style={{ marginBottom: 16 }}>
+          <EuiButton size="s" fill={signingTab === 'tx'} onClick={() => setSigningTab('tx')}>Sign Transaction</EuiButton>
+          <EuiButton size="s" fill={signingTab === 'msg'} onClick={() => setSigningTab('msg')} style={{ marginLeft: 8 }}>Sign Message</EuiButton>
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label><b>Auth Token</b></label>
+          <EuiFieldText value={authToken} onChange={e => setAuthToken(e.target.value)} placeholder="Paste your auth token (JWT) here" />
+        </div>
+        {signingTab === 'tx' ? (
+          <>
+            <div style={{ marginBottom: 8 }}>
+              <label><b>Transaction JSON</b></label>
+              <EuiFieldText value={signTxData} onChange={e => setSignTxData(e.target.value)} placeholder='{"to":"0x...","value":0,"data":"0x...","gas":21000,"gasPrice":1000000000,"nonce":0,"chainId":1337}' />
+            </div>
+            <EuiButton onClick={handleSignTransaction} isLoading={signLoading} isDisabled={!selectedAccountId || !signTxData || !authToken}>Sign Transaction</EuiButton>
+          </>
+        ) : (
+          <>
+            <div style={{ marginBottom: 8 }}>
+              <label><b>Message</b></label>
+              <EuiFieldText value={signMsg} onChange={e => setSignMsg(e.target.value)} placeholder="Message to sign" />
+            </div>
+            <EuiButton onClick={handleSignMessage} isLoading={signLoading} isDisabled={!selectedAccountId || !signMsg || !authToken}>Sign Message</EuiButton>
+          </>
+        )}
+        {signError && <EuiCallOut title="Error" color="danger">{signError}</EuiCallOut>}
+        {signResult && <EuiCallOut title="Signature Result" color="success"><pre style={{whiteSpace:'pre-wrap',wordBreak:'break-all'}}>{signResult}</pre></EuiCallOut>}
       </EuiCard>
-      <EuiSpacer size="l" />
     </div>
   );
 };

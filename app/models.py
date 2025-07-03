@@ -5,7 +5,13 @@ class CustomUser(AbstractUser):
     is_verifier = models.BooleanField(default=False)
     # Add any other custom fields here
 
+class Wallet(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='wallets')
+    name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
 class Account(models.Model):
+    wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, related_name='accounts', null=True, blank=True)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, null=True, blank=True)
     name = models.CharField(max_length=100)
     address = models.CharField(max_length=100, unique=True)

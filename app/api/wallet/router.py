@@ -8,7 +8,7 @@ from mnemonic import Mnemonic
 from web3.middleware import geth_poa_middleware
 
 import json
-from app.models import Account, Transaction
+from app.models import Account, Transaction, Wallet, CustomUser
 from django.db import transaction as db_transaction
 
 router = Router(tags=["wallet"])
@@ -80,13 +80,12 @@ def get_ganache_funder(w3):
         return None, None
 
 class WalletCreateRequest(BaseModel):
-    wallet_name: str
-    network: str = 'sepolia'
+    name: str
 
 class WalletCreateResponse(BaseModel):
-    address: str
-    private_key: str
-    mnemonic: str
+    id: int
+    name: str
+    created_at: str
 
 class WalletImportRequest(BaseModel):
     mnemonic: str
@@ -115,6 +114,7 @@ class WalletAccountRequest(BaseModel):
     rpc_url: str
     num_accounts: int = 1
     fund_amount_wei: int = 0
+    name: str | None = None  # Add name field
 
 class WalletAccountResponse(BaseModel):
     accounts: list[str]
@@ -122,35 +122,28 @@ class WalletAccountResponse(BaseModel):
     tx_hashes: list[str]
 
 class WalletListItem(BaseModel):
+    id: int
+    name: str
+    created_at: str
+
+class AccountListItem(BaseModel):
+    id: int
     name: str
     address: str
-    private_key: str
-    mnemonic: str | None = None
+    created_at: str
+    balance: str | None = None
 
-@router.post("/create", response=WalletCreateResponse)
+@router.post("/wallet/create", response=WalletCreateResponse)
 def create_wallet(request, data: WalletCreateRequest):
-    mnemo = Mnemonic("english")
-    mnemonic = mnemo.generate(strength=128)
-    acct = EthAccount.from_mnemonic(mnemonic, account_path="m/44'/60'/0'/0/0")
-    address = acct.address
-    private_key = acct.key.hex()
-    # Save to file in app/ folder
-    wallet_name = data.wallet_name.strip().replace(' ', '_')
-    app_dir = os.path.join(settings.BASE_DIR, "app")
-    os.makedirs(app_dir, exist_ok=True)
-    file_path = os.path.join(app_dir, f"wallet_{wallet_name}.txt")
-    with open(file_path, 'w') as f:
-        f.write(f"Address: {address}\nPrivate Key: {private_key}\nMnemonic: {mnemonic}\n")
-    # Persist to DB
-    Account.objects.get_or_create(
-        address=address,
-        defaults={
-            'name': wallet_name,
-            'private_key': private_key,
-            'mnemonic': mnemonic,
-        }
-    )
-    return WalletCreateResponse(address=address, private_key=private_key, mnemonic=mnemonic)
+    user = request.user if hasattr(request, 'user') and request.user.is_authenticated else None
+    wallet = Wallet.objects.create(user=user, name=data.name)
+    return WalletCreateResponse(id=wallet.id, name=wallet.name, created_at=wallet.created_at.isoformat())
+
+@router.get("/wallet/list", response=list[WalletListItem])
+def list_wallets(request):
+    user = request.user if hasattr(request, 'user') and request.user.is_authenticated else None
+    wallets = Wallet.objects.filter(user=user) if user else Wallet.objects.all()
+    return [WalletListItem(id=w.id, name=w.name, created_at=w.created_at.isoformat()) for w in wallets]
 
 @router.post("/import", response=WalletImportResponse)
 def import_wallet(request, data: WalletImportRequest):
@@ -194,7 +187,7 @@ def generate_accounts_and_fund(request, data: WalletAccountRequest):
             db_account, _ = Account.objects.get_or_create(
                 address=acct.address,
                 defaults={
-                    'name': f'Generated Account {acct.address[:8]}',
+                    'name': data.name if data.name else f'Generated Account {acct.address[:8]}',
                     'private_key': acct.key.hex(),
                     'mnemonic': None,
                 }
@@ -222,31 +215,17 @@ def generate_accounts_and_fund(request, data: WalletAccountRequest):
                 )
     return WalletAccountResponse(accounts=accounts, funded=funded, tx_hashes=tx_hashes)
 
-@router.get("/list", response=list[WalletListItem])
-def list_wallets(request):
-    # Return all accounts from the database, including their latest balance and transactions
-    from web3 import Web3
-    rpc_url = request.GET.get('rpc_url')
-    w3 = None
-    if rpc_url:
-        w3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={'timeout': 30}))
-    accounts = Account.objects.all()
-    wallets = []
-    for acc in accounts:
-        balance = None
-        if w3:
-            try:
-                balance = str(w3.eth.get_balance(acc.address))
-            except Exception:
-                balance = None
-        txs = list(acc.transactions.values('tx_hash', 'to_address', 'amount', 'timestamp', 'status'))
-        wallets.append({
-            'name': acc.name,
-            'address': acc.address,
-            'private_key': acc.private_key,
-            'mnemonic': acc.mnemonic,
-            'created_at': acc.created_at,
-            'balance': balance,
-            'transactions': txs
-        })
-    return wallets
+@router.get("/account/list", response=list[AccountListItem])
+def list_accounts(request, wallet_id: int):
+    accounts = Account.objects.filter(wallet_id=wallet_id)
+    # Optionally fetch balances here if needed
+    return [AccountListItem(id=a.id, name=a.name, address=a.address, created_at=a.created_at.isoformat()) for a in accounts]
+
+@router.get("/account/balance", response=str)
+def get_account_balance(request, address: str, rpc_url: str = None):
+    w3 = Web3(Web3.HTTPProvider(rpc_url or 'http://ganache:8545'))
+    try:
+        balance = w3.eth.get_balance(address)
+        return str(balance)
+    except Exception as e:
+        return f"Error: {str(e)}"

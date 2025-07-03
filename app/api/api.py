@@ -46,6 +46,22 @@ from django.core.cache import cache
 from django.contrib.auth import login
 from app.models import CustomUser, Account
 from django.db import transaction as db_transaction
+from django.utils.decorators import method_decorator
+from ninja.security import HttpBearer
+from ninja import Router
+from web3 import Web3
+
+class TokenAuth(HttpBearer):
+    def authenticate(self, request, token):
+        # Example: check token in user session or DB
+        user = CustomUser.objects.filter(auth_token=token).first()
+        if user:
+            request.user = user
+            return token
+        return None
+
+# --- Signing Endpoints with TokenAuth ---
+auth_router = Router(auth=TokenAuth())
 
 @api.get("/auth/challenge/{address}/")
 def get_challenge(request, address: str):
@@ -119,3 +135,43 @@ def verify_signature_linked_only(request, address: str, signature: str):
             return {"success": False, "error": "Signature does not match address."}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+@auth_router.post("/sign_transaction")
+@csrf_exempt
+def sign_transaction(request):
+    if not hasattr(request, 'user') or not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    data = request.json if hasattr(request, 'json') else request.data
+    account_id = data.get('account_id')
+    tx = data.get('tx')  # dict: to, value, data, gas, gasPrice, nonce, chainId
+    if not account_id or not tx:
+        return JsonResponse({'error': 'Missing account_id or tx'}, status=400)
+    try:
+        account = Account.objects.get(id=account_id, user=request.user)
+    except Account.DoesNotExist:
+        return JsonResponse({'error': 'Account not found'}, status=404)
+    w3 = Web3()
+    signed = w3.eth.account.sign_transaction(tx, private_key=account.private_key)
+    return JsonResponse({'rawTransaction': signed.rawTransaction.hex(), 'hash': signed.hash.hex()})
+
+@auth_router.post("/sign_message")
+@csrf_exempt
+def sign_message(request):
+    if not hasattr(request, 'user') or not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    data = request.json if hasattr(request, 'json') else request.data
+    account_id = data.get('account_id')
+    message = data.get('message')
+    if not account_id or not message:
+        return JsonResponse({'error': 'Missing account_id or message'}, status=400)
+    try:
+        account = Account.objects.get(id=account_id, user=request.user)
+    except Account.DoesNotExist:
+        return JsonResponse({'error': 'Account not found'}, status=404)
+    w3 = Web3()
+    msg = encode_defunct(text=message)
+    signed = w3.eth.account.sign_message(msg, private_key=account.private_key)
+    return JsonResponse({'signature': signed.signature.hex()})
+
+# Register the router with authentication
+api.add_router("/auth", auth_router)
