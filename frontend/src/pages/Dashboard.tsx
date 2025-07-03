@@ -15,7 +15,6 @@ import {
 } from '@elastic/eui';
 import {
   fetchDashboardMetrics,
-  fetchCertificates,
 } from '../services/api';
 
 const tradeoffMetrics = [
@@ -39,7 +38,6 @@ const Dashboard = () => {
   const [metrics, setMetrics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [certificates, setCertificates] = useState<any[]>([]);
 
   useEffect(() => {
     fetchDashboardMetrics()
@@ -51,12 +49,6 @@ const Dashboard = () => {
         setError('Failed to load dashboard metrics');
         setLoading(false);
       });
-    fetchCertificates()
-      .then((data) => {
-        setCertificates(data.certificates.map((item: any, idx: number) => ({ id: idx + 1, ...item })));
-        setLoading(false);
-      })
-      .catch(() => setCertificates([]));
   }, []);
 
   const systemStats = [

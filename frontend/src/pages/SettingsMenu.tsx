@@ -42,70 +42,6 @@ const actions = [
       errorMsg: 'MetaMask connection failed: ',
       iconType: 'discoverApp',
     },
-    // {
-    //   id: 'execute-fill-tables',
-    //   title: 'Execute Fill Tables Procedure',
-    //   url: '/app/v1/cyber/settings/execute_fake_data_procedure/',
-    //   successMsg: 'Executed procedure to fill the tables.',
-    //   errorMsg: 'Failed to execute the procedure to fill the tables: ',
-    //   iconType: 'playFilled',
-    // },
-    // {
-    //   id: 'stamps-last-updated',
-    //   title: 'Create Trigger to Change Last_Updated in Threat Intelligence',
-    //   url: '/app/v1/cyber/settings/create_threat_update_trigger/',
-    //   successMsg: 'Created trigger to update last_updated date.',
-    //   errorMsg: 'Failed to create trigger to update last_updated date: ',
-    //   iconType: 'calendar',
-    // },
-    // {
-    //   id: 'stamps-last-updated',
-    //   title: 'Create Trigger to Change Last_Updated - Associations',
-    //   url: '/app/v1/cyber/settings/create_assoc_touch_triggers/',
-    //   successMsg: 'Created trigger that initiates updates to last_updated date from threat associations.',
-    //   errorMsg: 'Failed to create trigger that initiates updates to last_updated date from threat associations: ',
-    //   iconType: 'bolt',
-    // },
-    // {
-    //   id: 'create-dashboard',
-    //   title: 'Create Dashboard View',
-    //   url: '/app/v1/cyber/dashboard/create_view/',
-    //   successMsg: 'Dashboard View created successfully.',
-    //   errorMsg: 'Failed to create the dashboard view: ',
-    //   iconType: 'dashboardApp',
-    // },
-    // {
-    //   id: 'create-risk-dashboard',
-    //   title: 'Create Function to Calculate Risk Score',
-    //   url: '/app/v1/cyber/risk/create_risk_score_function/',
-    //   successMsg: 'Function to calculate risk score was created successfully.',
-    //   errorMsg: 'Failed to create the function to calculate risk score: ',
-    //   iconType: 'consoleApp',
-    // },
-    // {
-    //   id: 'create-truncate',
-    //   title: 'Create Truncate Procedure',
-    //   url: '/app/v1/cyber/settings/create_truncate_procedure/',
-    //   successMsg: 'Truncate procedure created.',
-    //   errorMsg: 'Failed to create the procedure: ',
-    //   iconType: 'eraser',
-    // },
-    // {
-    //   id: 'execute-truncate',
-    //   title: 'Execute Truncate Procedure',
-    //   url: '/app/v1/cyber/settings/execute_truncate_procedure/',
-    //   successMsg: 'Truncate procedure executed.',
-    //   errorMsg: 'Failed to execute the procedure: ',
-    //   iconType: 'play',
-    // },
-    // {
-    //   id: 'drop-db',
-    //   title: 'Drop Database',
-    //   url: '/app/v1/cyber/settings/drop_database/',
-    //   successMsg: 'Database dropped.',
-    //   errorMsg: 'Failed to drop the database: ',
-    //   iconType: 'trash',
-    // },
 ];
 
 // 5 columns x 4 rows = 20 tiles total
@@ -115,7 +51,6 @@ const SettingsMenu: React.FC = () => {
   const [selected, setSelected] = useState<string[]>([]);
   const [address, setAddress] = useState<string>('');
   const [error, setError] = useState<string>('');
-  const [success, setSuccess] = useState<string>('');
 
   const handleAction = async (action: typeof actions[0]) => {
     if (action.id === 'connect-metamask') {
@@ -168,11 +103,6 @@ const SettingsMenu: React.FC = () => {
       {error && (
         <EuiCallOut title="Error" color="danger" iconType="alert">
           <p>{error}</p>
-        </EuiCallOut>
-      )}
-      {success && (
-        <EuiCallOut title="Success" color="success" iconType="check">
-          <p>{success}</p>
         </EuiCallOut>
       )}
       <EuiSpacer size="xl" />

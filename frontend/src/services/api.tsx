@@ -1,7 +1,6 @@
 import axios from 'axios';
 
-const raw = process.env.REACT_APP_API_URL?.trim();
-const API_URL = raw && raw !== '' ? raw : 'http://localhost:8000';
+const API_URL = 'http://localhost:8000';
 
 
 const api = axios.create({

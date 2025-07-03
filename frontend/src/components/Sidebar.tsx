@@ -6,7 +6,6 @@ import {
   EuiFlexGroup,
   EuiFlexItem,
   EuiText,
-  EuiButton
 } from '@elastic/eui';
 import { useNavigate, useLocation } from 'react-router-dom';
 

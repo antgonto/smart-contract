@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  EuiFlexGrid,
-  EuiFlexItem,
   EuiCard,
   EuiForm,
   EuiFormRow,
@@ -11,16 +9,18 @@ import {
   EuiCallOut,
   EuiText,
   EuiTitle,
-  EuiCopy,
-  EuiIcon,
   EuiRadioGroup,
   EuiBasicTable,
 } from '@elastic/eui';
-import { createWallet, importWallet, getBalance, importWalletPrivateKey, generateAccountsAndFund, listWallets } from '../services/walletService';
+import { createWallet, importWallet, getBalance, importWalletPrivateKey, generateAccountsAndFund, listWallets, signTransaction, signMessage } from '../services/walletService';
 import { persistAccount, persistTransaction } from '../services/api';
 import { useWallet } from '../contexts/WalletContext';
+import axios from "axios";
+
 
 const DEFAULT_RPC_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:8545' : 'http://ganache:8545';
+
+const API_BASE = (process.env.REACT_APP_API_URL || '') + '/app/v1/smartcontracts/wallet'; // Use relative path for proxy compatibility
 
 const Wallet: React.FC = () => {
   const [walletName, setWalletName] = useState('');
@@ -34,10 +34,10 @@ const Wallet: React.FC = () => {
   const [fundAmount, setFundAmount] = useState('0');
   const [generatedAccounts, setGeneratedAccounts] = useState<string[]>([]);
   const [fundTxHashes, setFundTxHashes] = useState<string[]>([]);
-  const { accounts, setAccounts, selectedAccountIdx, setSelectedAccountIdx, selectedAccount } = useWallet();
-  const [accountBalances, setAccountBalances] = useState<string[]>([]);
+  const { accounts, setAccounts } = useWallet();
   const [backendAccounts, setBackendAccounts] = useState<any[]>([]);
   const [selectedBackendAccountIdx, setSelectedBackendAccountIdx] = useState(0);
+  const [accountBalances, setAccountBalances] = useState<string[]>([]);
 
   // Wallet selection dropdown and account radio button list
   const [wallets, setWallets] = useState<any[]>([]); // List of wallets
@@ -46,7 +46,7 @@ const Wallet: React.FC = () => {
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
 
   // Move fetchBalances to top-level so it can be called anywhere
-  const fetchBalances = async () => {
+  const fetchBalances = useCallback(async () => {
     if (accounts.length === 0) { setAccountBalances([]); return; }
     const balances = await Promise.all(accounts.map(async acc => {
       try {
@@ -57,18 +57,20 @@ const Wallet: React.FC = () => {
       }
     }));
     setAccountBalances(balances);
-  };
+  }, [accounts, rpcUrl]);
 
   // Fetch balances for all accounts when accounts or rpcUrl changes
   useEffect(() => {
     fetchBalances();
-  }, [accounts, rpcUrl]);
+  }, [accounts, rpcUrl, fetchBalances]);
+
 
   // On mount, fetch wallets/accounts from backend
   useEffect(() => {
     async function fetchWallets() {
       try {
         const wallets = await listWallets();
+        if (!Array.isArray(wallets)) throw new Error('Wallets response is not an array');
         setBackendAccounts(wallets);
         // Optionally, set the first account as selected
         if (wallets.length > 0) setSelectedBackendAccountIdx(0);
@@ -99,8 +101,8 @@ const Wallet: React.FC = () => {
     async function fetchAccountsForWallet() {
       if (!selectedWalletId) return;
       try {
-        // Replace with your backend call to list accounts for a wallet
-        const res = await fetch(`/api/wallet/account/list?wallet_id=${selectedWalletId}`);
+        // Replace with your backend call to list accounts for a wallet `${API_BASE}/import`
+        const res = await fetch(`${API_BASE}/account/list?wallet_id=${selectedWalletId}`);
         if (!res.ok) throw new Error('Failed to fetch accounts');
         const accounts = await res.json();
         setWalletAccounts(accounts);
@@ -117,7 +119,7 @@ const Wallet: React.FC = () => {
     async function fetchSelectedAccountBalance() {
       if (!selectedAccountId) { setBalance(''); return; }
       try {
-        const res = await fetch(`/api/wallet/account/balance?address=${selectedAccountId}&rpc_url=${rpcUrl}`);
+        const res = await fetch(await axios.post(`${API_BASE}/account/balance?address=${selectedAccountId}&rpc_url=${rpcUrl}`));
         if (!res.ok) throw new Error('Failed to fetch balance');
         const bal = await res.text();
         setBalance((parseFloat(bal) / 1e18).toFixed(4) + ' ETH');
@@ -140,7 +142,7 @@ const Wallet: React.FC = () => {
     setAddAccountError('');
     try {
       // Call backend to generate and fund a new account
-      const res = await fetch('/api/wallet/generate_accounts', {
+      const res = await fetch(`${API_BASE}/generate_accounts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -155,7 +157,7 @@ const Wallet: React.FC = () => {
       setIsAddAccountModalOpen(false);
       setNewAccountName('');
       // Refresh accounts
-      const accountsRes = await fetch(`/api/wallet/account/list?wallet_id=${selectedWalletId}`);
+      const accountsRes = await fetch(`${API_BASE}/account/list?wallet_id=${selectedWalletId}`);
       setWalletAccounts(await accountsRes.json());
     } catch (e: any) {
       setAddAccountError(e.message || 'Failed to add account');
@@ -185,7 +187,7 @@ const Wallet: React.FC = () => {
       setBackendAccounts(prev => [newAccount, ...prev]);
       const updatedAccounts = [...accounts, newAccount];
       setAccounts(updatedAccounts);
-      setSelectedAccountIdx(updatedAccounts.length - 1); // select the new account
+      setSelectedBackendAccountIdx(updatedAccounts.length - 1); // select the new account
       setSuccess('Wallet created successfully!');
       // Optionally, also refresh from backend to get all info (including balance/txs)
       await refreshBackendAccounts();
@@ -201,7 +203,7 @@ const Wallet: React.FC = () => {
       const newAccount = { name: 'Imported (mnemonic)', address: res.address, privateKey: res.private_key, mnemonic: importMnemonic, created_at: new Date().toISOString() };
       const updatedAccounts = [...accounts, newAccount];
       setAccounts(updatedAccounts);
-      setSelectedAccountIdx(updatedAccounts.length - 1);
+      setSelectedBackendAccountIdx(updatedAccounts.length - 1);
       setSuccess('Wallet imported from mnemonic!');
       await refreshBackendAccounts(); // Refresh backend accounts list
     } catch (e) {
@@ -216,7 +218,7 @@ const Wallet: React.FC = () => {
       const newAccount = { name: 'Imported (private key)', address: res.address, privateKey: res.private_key, created_at: new Date().toISOString() };
       const updatedAccounts = [...accounts, newAccount];
       setAccounts(updatedAccounts);
-      setSelectedAccountIdx(updatedAccounts.length - 1);
+      setSelectedBackendAccountIdx(updatedAccounts.length - 1);
       setSuccess('Wallet imported from private key!');
       await refreshBackendAccounts(); // Refresh backend accounts list
     } catch (e) {
@@ -229,6 +231,7 @@ const Wallet: React.FC = () => {
     async function fetchWallets() {
       try {
         const wallets = await listWallets();
+        if (!Array.isArray(wallets)) throw new Error('Wallets response is not an array');
         setBackendAccounts(wallets);
         if (wallets.length > 0) setSelectedBackendAccountIdx(0);
       } catch (e) {
@@ -238,21 +241,6 @@ const Wallet: React.FC = () => {
     fetchWallets();
   }, []);
 
-  const handleGetBalance = async () => {
-    setError(''); setSuccess('');
-    const account = backendAccounts[selectedBackendAccountIdx];
-    if (!account) {
-      setError('No active account.');
-      return;
-    }
-    try {
-      const res = await getBalance(account.address, rpcUrl);
-      setBalance(res.balance);
-      setSuccess('Balance fetched!');
-    } catch (e: any) {
-      setError(e?.response?.data?.detail || e?.message || 'Failed to fetch balance');
-    }
-  };
 
   const handleGenerateAccounts = async () => {
     setError(''); setSuccess('');
@@ -331,16 +319,16 @@ const Wallet: React.FC = () => {
 
   // Wallet selection dropdown UI
   // Render wallet dropdown
-  const walletOptions = wallets.map(w => ({
+  const walletOptions = Array.isArray(wallets) ? wallets.map(w => ({
     value: w.id || w._id || w.address,
     inputDisplay: w.name || w.address || w.id
-  }));
+  })) : [];
 
   // Render account radio button list
-  const accountRadioOptions = walletAccounts.map(acc => ({
+  const accountRadioOptions = Array.isArray(walletAccounts) ? walletAccounts.map(acc => ({
     id: acc.address,
     label: acc.name + ' (' + acc.address.slice(0, 8) + '...)',
-  }));
+  })) : [];
 
   // --- Signing UI State ---
   const [signingTab, setSigningTab] = useState<'tx' | 'msg'>('tx');
@@ -356,7 +344,7 @@ const Wallet: React.FC = () => {
     setSignLoading(true); setSignError(''); setSignResult(null);
     try {
       const tx = JSON.parse(signTxData);
-      const res = await import('../services/walletService').then(svc => svc.signTransaction(selectedAccountId!, tx, authToken));
+      const res = await signTransaction(selectedAccountId!, tx, authToken);
       setSignResult(JSON.stringify(res, null, 2));
     } catch (e: any) {
       setSignError(e.message || 'Failed to sign transaction. Ensure valid JSON and authentication.');
@@ -367,7 +355,7 @@ const Wallet: React.FC = () => {
   const handleSignMessage = async () => {
     setSignLoading(true); setSignError(''); setSignResult(null);
     try {
-      const res = await import('../services/walletService').then(svc => svc.signMessage(selectedAccountId!, signMsg, authToken));
+      const res = await signMessage(selectedAccountId!, signMsg, authToken);
       setSignResult(JSON.stringify(res, null, 2));
     } catch (e: any) {
       setSignError(e.message || 'Failed to sign message.');
@@ -457,7 +445,7 @@ const Wallet: React.FC = () => {
       <EuiSpacer size="m" />
       <EuiCard title="Your Accounts" layout="vertical">
         <EuiBasicTable
-          items={backendAccounts}
+          items={Array.isArray(backendAccounts) ? backendAccounts : []}
           columns={accountColumns}
           rowHeader="name"
         />
