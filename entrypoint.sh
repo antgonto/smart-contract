@@ -1,4 +1,5 @@
 #!/bin/bash
+# Ensure script uses Unix (LF) line endings and is executable
 cd /code
 
 # Install or upgrade django-cors-headers

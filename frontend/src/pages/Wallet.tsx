@@ -1,241 +1,315 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   EuiFlexGrid,
   EuiFlexItem,
   EuiCard,
-  EuiIcon,
+  EuiForm,
+  EuiFormRow,
+  EuiFieldText,
+  EuiButton,
   EuiSpacer,
   EuiCallOut,
-  EuiFieldText,
+  EuiText,
+  EuiTitle,
+  EuiCopy,
+  EuiIcon,
+  EuiRadioGroup,
+  EuiBasicTable,
 } from '@elastic/eui';
-import { ethers } from 'ethers';
-import { walletService } from '../services/api';
+import { createWallet, importWallet, getBalance, importWalletPrivateKey, generateAccountsAndFund, listWallets } from '../services/walletService';
+import { persistAccount, persistTransaction } from '../services/api';
+import { useWallet } from '../contexts/WalletContext';
 
-const actions = [
-  {
-    id: 'create-wallet',
-    title: 'Create Wallet',
-    iconType: 'plusInCircle',
-    handler: 'handleCreateWallet',
-    successMsg: 'Wallet created: ',
-    errorMsg: 'Wallet creation failed',
-  },
-  {
-    id: 'connect-metamask',
-    title: 'Connect MetaMask',
-    iconType: 'discoverApp',
-    handler: 'handleConnectMetaMask',
-    successMsg: 'MetaMask connected successfully.',
-    errorMsg: 'MetaMask connection failed: ',
-  },
-  {
-    id: 'fetch-balance',
-    title: 'Fetch Balance',
-    iconType: 'lensApp',
-    handler: 'handleFetchBalance',
-    successMsg: 'Balance fetched: ',
-    errorMsg: 'Failed to fetch balance',
-  },
-  {
-    id: 'send',
-    title: 'Send Transaction',
-    iconType: 'sortRight',
-    handler: 'handleSend',
-    successMsg: 'Transaction sent! Hash: ',
-    errorMsg: 'Transaction failed: ',
-  },
-];
+const DEFAULT_RPC_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:8545' : 'http://ganache:8545';
 
 const Wallet: React.FC = () => {
-  const [address, setAddress] = useState('');
+  const [walletName, setWalletName] = useState('');
+  const [importMnemonic, setImportMnemonic] = useState('');
+  const [importPrivKey, setImportPrivKey] = useState('');
   const [balance, setBalance] = useState('');
+  const [rpcUrl, setRpcUrl] = useState(DEFAULT_RPC_URL);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [toAddress, setToAddress] = useState('');
-  const [amount, setAmount] = useState('');
-  const [isMetaMask, setIsMetaMask] = useState(false);
-  const [selectedNetwork, setSelectedNetwork] = useState('mainnet');
+  const [numAccounts, setNumAccounts] = useState(1);
+  const [fundAmount, setFundAmount] = useState('0');
+  const [generatedAccounts, setGeneratedAccounts] = useState<string[]>([]);
+  const [fundTxHashes, setFundTxHashes] = useState<string[]>([]);
+  const { accounts, setAccounts, selectedAccountIdx, setSelectedAccountIdx, selectedAccount } = useWallet();
+  const [accountBalances, setAccountBalances] = useState<string[]>([]);
+  const [backendAccounts, setBackendAccounts] = useState<any[]>([]);
+  const [selectedBackendAccountIdx, setSelectedBackendAccountIdx] = useState(0);
 
-  const networks = [
-    { id: 'mainnet', name: 'Ethereum Mainnet', chainId: '0x1' },
-    { id: 'goerli', name: 'Goerli Testnet', chainId: '0x5' },
-    { id: 'sepolia', name: 'Sepolia Testnet', chainId: '0xaa36a7' },
-    { id: 'ganache', name: 'Ganache Local', chainId: '0x539' },
-    // Add more networks as needed
+  // Fetch balances for all accounts when accounts or rpcUrl changes
+  useEffect(() => {
+    async function fetchBalances() {
+      if (accounts.length === 0) { setAccountBalances([]); return; }
+      const balances = await Promise.all(accounts.map(async acc => {
+        try {
+          const res = await getBalance(acc.address, rpcUrl);
+          return res.balance;
+        } catch {
+          return 'Error';
+        }
+      }));
+      setAccountBalances(balances);
+    }
+    fetchBalances();
+  }, [accounts, rpcUrl]);
+
+  // On mount, fetch wallets/accounts from backend
+  useEffect(() => {
+    async function fetchWallets() {
+      try {
+        const wallets = await listWallets();
+        setBackendAccounts(wallets);
+        // Optionally, set the first account as selected
+        if (wallets.length > 0) setSelectedBackendAccountIdx(0);
+      } catch (e) {
+        setError('Failed to load wallets from backend');
+      }
+    }
+    fetchWallets();
+  }, []);
+
+  // Helper to refresh backend accounts
+  const refreshBackendAccounts = async () => {
+    try {
+      const wallets = await listWallets();
+      setBackendAccounts(wallets);
+      if (wallets.length > 0) setSelectedBackendAccountIdx(0);
+    } catch (e) {
+      setError('Failed to load wallets from backend');
+    }
+  };
+
+  const handleCreate = async () => {
+    setError(''); setSuccess('');
+    if (!walletName) { setError('Please enter a wallet name.'); return; }
+    try {
+      const res = await createWallet(walletName);
+      const newAccount = { name: walletName, address: res.address, private_key: res.private_key, mnemonic: res.mnemonic };
+      // Immediately update backendAccounts state so the new account appears without refresh
+      setBackendAccounts(prev => [newAccount, ...prev]);
+      const updatedAccounts = [...accounts, newAccount];
+      setAccounts(updatedAccounts);
+      setSelectedAccountIdx(updatedAccounts.length - 1); // select the new account
+      setSuccess('Wallet created successfully!');
+      // Optionally, also refresh from backend to get all info (including balance/txs)
+      await refreshBackendAccounts();
+    } catch (e) {
+      setError('Failed to create wallet');
+    }
+  };
+
+  const handleImportMnemonic = async () => {
+    setError(''); setSuccess('');
+    try {
+      const res = await importWallet(importMnemonic);
+      const newAccount = { name: 'Imported (mnemonic)', address: res.address, privateKey: res.private_key, mnemonic: importMnemonic };
+      const updatedAccounts = [...accounts, newAccount];
+      setAccounts(updatedAccounts);
+      setSelectedAccountIdx(updatedAccounts.length - 1);
+      setSuccess('Wallet imported from mnemonic!');
+      await refreshBackendAccounts(); // Refresh backend accounts list
+    } catch (e) {
+      setError('Failed to import wallet from mnemonic');
+    }
+  };
+
+  const handleImportPrivateKey = async () => {
+    setError(''); setSuccess('');
+    try {
+      const res = await importWalletPrivateKey(importPrivKey);
+      const newAccount = { name: 'Imported (private key)', address: res.address, privateKey: res.private_key };
+      const updatedAccounts = [...accounts, newAccount];
+      setAccounts(updatedAccounts);
+      setSelectedAccountIdx(updatedAccounts.length - 1);
+      setSuccess('Wallet imported from private key!');
+      await refreshBackendAccounts(); // Refresh backend accounts list
+    } catch (e) {
+      setError('Failed to import wallet from private key');
+    }
+  };
+
+  // Fetch wallets/accounts from backend on mount
+  useEffect(() => {
+    async function fetchWallets() {
+      try {
+        const wallets = await listWallets();
+        setBackendAccounts(wallets);
+        if (wallets.length > 0) setSelectedBackendAccountIdx(0);
+      } catch (e) {
+        setError('Failed to load wallets from backend');
+      }
+    }
+    fetchWallets();
+  }, []);
+
+  const handleGetBalance = async () => {
+    setError(''); setSuccess('');
+    const account = backendAccounts[selectedBackendAccountIdx];
+    if (!account) {
+      setError('No active account.');
+      return;
+    }
+    try {
+      const res = await getBalance(account.address, rpcUrl);
+      setBalance(res.balance);
+      setSuccess('Balance fetched!');
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Failed to fetch balance');
+    }
+  };
+
+  const handleGenerateAccounts = async () => {
+    setError(''); setSuccess('');
+    const account = backendAccounts[selectedBackendAccountIdx];
+    if (!account || !account.private_key) {
+      setError('No active account with private key.');
+      return;
+    }
+    try {
+      const res = await generateAccountsAndFund({
+        wallet_private_key: account.private_key,
+        rpc_url: rpcUrl,
+        num_accounts: numAccounts,
+        fund_amount_wei: parseInt(fundAmount, 10) || 0
+      });
+      setGeneratedAccounts(res.accounts);
+      setFundTxHashes(res.tx_hashes);
+      setSuccess('Accounts generated' + (res.funded ? ' and funded!' : '!'));
+      // Persist generated accounts
+      for (const acc of res.accounts) {
+        await persistAccount({
+          address: acc.address,
+          private_key: acc.privateKey,
+          mnemonic: acc.mnemonic,
+          name: acc.name || '',
+        });
+      }
+      // Persist transaction history
+      for (const tx of res.tx_hashes) {
+        await persistTransaction({
+          tx_hash: tx,
+          account_address: res.accounts[0]?.address,
+        });
+      }
+      await refreshBackendAccounts(); // Refresh backend accounts list
+      // Optionally, wait a bit and refresh balances
+      setTimeout(() => {
+        fetchBalances();
+      }, 2000);
+    } catch (e) {
+      setError('Failed to generate/fund accounts or persist data');
+    }
+  };
+
+  // Table columns for accounts
+  const accountColumns = [
+    { field: 'name', name: 'Name' },
+    { field: 'address', name: 'Address' },
+    { field: 'balance', name: 'Balance (wei)' },
+    { field: 'private_key', name: 'Private Key' },
+    { field: 'mnemonic', name: 'Mnemonic' },
+    { field: 'created_at', name: 'Created At' },
+    {
+      field: 'transactions',
+      name: 'Transactions',
+      render: (txs: any[]) => (
+        <ul style={{margin:0, padding:0, listStyle:'none'}}>
+          {txs && txs.length > 0 ? txs.map((tx, i) => (
+            <li key={i}>
+              <b>Hash:</b> {tx.tx_hash}<br/>
+              <b>To:</b> {tx.to_address}<br/>
+              <b>Amount:</b> {tx.amount}<br/>
+              <b>Status:</b> {tx.status}<br/>
+              <b>Time:</b> {tx.timestamp}
+            </li>
+          )) : <span>No transactions</span>}
+        </ul>
+      )
+    }
   ];
 
-  const handleCreateWallet = async () => {
-    setError(''); setSuccess('');
-    try {
-      const res = await walletService.create();
-      setSuccess(actions[0].successMsg + res.data.address);
-      setAddress(res.data.address);
-    } catch {
-      setError(actions[0].errorMsg);
-    }
-  };
-
-  const handleConnectMetaMask = async () => {
-    setError(''); setSuccess('');
-    if ((window as any).ethereum) {
-      try {
-        // Switch to selected network before connecting
-        const network = networks.find(n => n.id === selectedNetwork);
-        if (network) {
-          try {
-            await (window as any).ethereum.request({
-              method: 'wallet_switchEthereumChain',
-              params: [{ chainId: network.chainId }],
-            });
-          } catch (switchError: any) {
-            // If the network is not added to MetaMask, try to add it
-            if (switchError.code === 4902) {
-              await (window as any).ethereum.request({
-                method: 'wallet_addEthereumChain',
-                params: [{
-                  chainId: network.chainId,
-                  chainName: network.name,
-                  rpcUrls: ['http://localhost:8545'], // You may want to customize this per network
-                }],
-              });
-            } else {
-              throw switchError;
-            }
-          }
-        }
-        const accounts = await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
-        setAddress(accounts[0]);
-        setIsMetaMask(true);
-        setSuccess(actions[1].successMsg + ` Connected to ${network?.name}`);
-      } catch (err: any) {
-        setError(actions[1].errorMsg + (err?.message || ''));
-      }
-    } else {
-      setError('MetaMask not detected');
-    }
-  };
-
-  const handleFetchBalance = async () => {
-    setError(''); setSuccess('');
-    if (!address) { setError('No address set'); return; }
-    try {
-      if (isMetaMask) {
-        const provider = new ethers.BrowserProvider((window as any).ethereum);
-        const bal = await provider.getBalance(address);
-        setBalance(ethers.formatEther(bal));
-        setSuccess(actions[2].successMsg + ethers.formatEther(bal) + ' ETH');
-      } else {
-        const res = await walletService.balance(address);
-        setBalance(res.data.balance);
-        setSuccess(actions[2].successMsg + res.data.balance + ' ETH');
-      }
-    } catch {
-      setError(actions[2].errorMsg);
-    }
-  };
-
-  const handleSend = async () => {
-    setError(''); setSuccess('');
-    if (!ethers.isAddress(toAddress)) {
-      setError('Invalid recipient address');
-      return;
-    }
-    if (!amount) {
-      setError('Amount required');
-      return;
-    }
-    try {
-      if (isMetaMask) {
-        const provider = new ethers.BrowserProvider((window as any).ethereum);
-        const signer = await provider.getSigner();
-        const tx = await signer.sendTransaction({
-          to: toAddress,
-          value: ethers.parseEther(amount)
-        });
-        setSuccess(actions[3].successMsg + tx.hash);
-      } else {
-        // For backend wallet, you would need to prompt for private key or have it stored securely
-        setError('Wallet send not implemented (private key required)');
-        return;
-      }
-      setToAddress('');
-      setAmount('');
-      handleFetchBalance();
-    } catch (err: any) {
-      setError(actions[3].errorMsg + (err?.message || ''));
-    }
-  };
-
-  const handleAction = (handler: string) => {
-    switch (handler) {
-      case 'handleCreateWallet':
-        handleCreateWallet(); break;
-      case 'handleConnectMetaMask':
-        handleConnectMetaMask(); break;
-      case 'handleFetchBalance':
-        handleFetchBalance(); break;
-      case 'handleSend':
-        handleSend(); break;
-      default:
-        break;
-    }
-  };
-
   return (
-    <div style={{ maxWidth: 700, margin: '0 auto', padding: 24 }}>
-      <EuiSpacer size="xl" />
-      {/* Network selection dropdown */}
-      <div style={{ marginBottom: 16 }}>
-        <label htmlFor="network-select"><b>Select Network:</b></label>
-        <select
-          id="network-select"
-          value={selectedNetwork}
-          onChange={e => setSelectedNetwork(e.target.value)}
-          style={{ marginLeft: 8, padding: 4 }}
+    <div style={{ maxWidth: 1400, margin: 'auto', padding: 20 }}>
+      <EuiTitle size="l"><h2>Wallet Management</h2></EuiTitle>
+      <EuiSpacer size="l" />
+      {error && <EuiCallOut title="Error" color="danger" iconType="alert">{error}</EuiCallOut>}
+      {success && <EuiCallOut title="Success" color="success" iconType="check">{success}</EuiCallOut>}
+      <EuiSpacer size="m" />
+      <EuiCard title="Your Accounts" layout="vertical">
+        <EuiBasicTable
+          items={backendAccounts}
+          columns={accountColumns}
+          rowHeader="name"
+        />
+      </EuiCard>
+      <EuiSpacer size="l" />
+      {backendAccounts[selectedBackendAccountIdx] && (
+        <EuiCard
+          title="Selected Account Details"
+          description="Copy and store your credentials securely."
+          layout="vertical"
         >
-          {networks.map(net => (
-            <option key={net.id} value={net.id}>{net.name}</option>
-          ))}
-        </select>
-      </div>
-      {address && (
-        <EuiCallOut title="Connected Address" color="primary"><p>{address}</p></EuiCallOut>
+          <EuiText><b>Address:</b> <EuiCopy textToCopy={backendAccounts[selectedBackendAccountIdx].address}>{(copy) => (<span style={{cursor:'pointer'}} onClick={copy}>{backendAccounts[selectedBackendAccountIdx].address}</span>)}</EuiCopy></EuiText>
+          <EuiText><b>Private Key:</b> <EuiCopy textToCopy={backendAccounts[selectedBackendAccountIdx].private_key}>{(copy) => (<span style={{cursor:'pointer'}} onClick={copy}>{backendAccounts[selectedBackendAccountIdx].private_key}</span>)}</EuiCopy></EuiText>
+          {backendAccounts[selectedBackendAccountIdx].mnemonic && <EuiText><b>Mnemonic:</b> <EuiCopy textToCopy={backendAccounts[selectedBackendAccountIdx].mnemonic}>{(copy) => (<span style={{cursor:'pointer'}} onClick={copy}>{backendAccounts[selectedBackendAccountIdx].mnemonic}</span>)}</EuiCopy></EuiText>}
+          <EuiSpacer size="m" />
+          <EuiFormRow label="RPC URL">
+            <EuiFieldText value={rpcUrl} onChange={e => setRpcUrl(e.target.value)} />
+          </EuiFormRow>
+          <EuiButton onClick={handleGetBalance} isDisabled={!backendAccounts[selectedBackendAccountIdx]}>Get Balance</EuiButton>
+          {balance && <EuiText><b>Balance (wei):</b> {balance}</EuiText>}
+        </EuiCard>
       )}
-      {balance && (
-        <EuiCallOut title="Balance" color="success"><p>{balance} ETH</p></EuiCallOut>
-      )}
-      {error && <EuiCallOut title="Error" color="danger">{error}</EuiCallOut>}
-      {success && <EuiCallOut title="Success" color="success">{success}</EuiCallOut>}
-      <EuiSpacer size="xl" />
-      <EuiFlexGrid columns={2} gutterSize="l">
-        {actions.map(action => (
-          <EuiFlexItem key={action.id} style={{ minHeight: 180 }}>
-            <EuiCard
-              icon={action.customIcon || <EuiIcon type={action.iconType} size="xxl" />}
-              title={action.title}
-              textAlign="center"
-              paddingSize="l"
-              onClick={() => handleAction(action.handler)}
-            />
-            {action.id === 'send' && (
-              <div style={{ marginTop: 16 }}>
-                <EuiFieldText
-                  placeholder="Recipient Address"
-                  value={toAddress}
-                  onChange={e => setToAddress(e.target.value)}
-                  style={{ marginBottom: 8 }}
-                />
-                <EuiFieldText
-                  placeholder="Amount in ETH"
-                  value={amount}
-                  onChange={e => setAmount(e.target.value)}
-                  style={{ marginBottom: 8 }}
-                />
-              </div>
-            )}
-          </EuiFlexItem>
-        ))}
-      </EuiFlexGrid>
+      <EuiSpacer size="l" />
+      <EuiCard title="Generate & Fund Accounts" layout="vertical">
+        <EuiForm component="form">
+          <EuiFormRow label="Number of Accounts">
+            <EuiFieldText type="number" value={numAccounts} onChange={e => setNumAccounts(Number(e.target.value))} min={1} />
+          </EuiFormRow>
+          <EuiFormRow label="Fund Amount (wei, per account)">
+            <EuiFieldText type="number" value={fundAmount} onChange={e => setFundAmount(e.target.value)} min={0} />
+          </EuiFormRow>
+          <EuiButton fill onClick={handleGenerateAccounts} isDisabled={!backendAccounts[selectedBackendAccountIdx] || !backendAccounts[selectedBackendAccountIdx].private_key}>Generate & Fund</EuiButton>
+        </EuiForm>
+        {generatedAccounts.length > 0 && (
+          <>
+            <EuiSpacer size="m" />
+            <EuiText><b>Generated Accounts:</b></EuiText>
+            {generatedAccounts.map((acc, i) => (
+              <EuiText key={i}>
+                {acc}
+                {fundTxHashes && fundTxHashes[i] && (
+                  <span> (Tx {fundTxHashes[i]})</span>
+                )}
+              </EuiText>
+            ))}
+          </>
+        )}
+      </EuiCard>
+      <EuiSpacer size="l" />
+      {/* Wallet Creation and Import Section */}
+      <EuiCard title="Create or Import Wallet" layout="vertical">
+        <EuiForm component="form">
+          <EuiFormRow label="Wallet Name (for new wallet)">
+            <EuiFieldText value={walletName} onChange={e => setWalletName(e.target.value)} placeholder="Enter wallet name" />
+          </EuiFormRow>
+          <EuiButton fill onClick={handleCreate} isDisabled={!walletName}>Create Wallet</EuiButton>
+          <EuiSpacer size="m" />
+          <EuiFormRow label="Import Wallet by Mnemonic">
+            <EuiFieldText value={importMnemonic} onChange={e => setImportMnemonic(e.target.value)} placeholder="Enter mnemonic phrase" />
+          </EuiFormRow>
+          <EuiButton onClick={handleImportMnemonic} isDisabled={!importMnemonic}>Import by Mnemonic</EuiButton>
+          <EuiSpacer size="m" />
+          <EuiFormRow label="Import Wallet by Private Key">
+            <EuiFieldText value={importPrivKey} onChange={e => setImportPrivKey(e.target.value)} placeholder="Enter private key" />
+          </EuiFormRow>
+          <EuiButton onClick={handleImportPrivateKey} isDisabled={!importPrivKey}>Import by Private Key</EuiButton>
+        </EuiForm>
+      </EuiCard>
+      <EuiSpacer size="l" />
     </div>
   );
 };

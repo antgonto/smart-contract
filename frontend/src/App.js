@@ -40,7 +40,6 @@ function App() {
                 <Route path="/register-certificate" element={<RegisterCertificate />} />
                 <Route path="/settings" element={<SettingsMenu />} />
                 <Route path="/certificates" element={<CertificatesList />} />
-                <Route path="/wallet" element={<Wallet />} />
                 {/* Additional routes can be added here */}
               </Routes>
             </EuiFlexItem>

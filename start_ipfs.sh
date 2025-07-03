@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # This script configures and then runs the IPFS daemon.
 
 # Exit if any command fails

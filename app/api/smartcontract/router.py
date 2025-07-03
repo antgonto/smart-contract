@@ -17,8 +17,10 @@ from app.api.smartcontract.contract_manager import ContractManager
 from django.http import HttpResponse
 from django.contrib.sessions.models import Session
 from django.utils import timezone
+from app.api.wallet.router import get_balance
+import traceback
 
-router = Router()
+router = Router(tags=["smartcontract"])
 
 manager = ContractManager()
 manager.refresh()
@@ -104,6 +106,12 @@ class DashboardMetrics(Schema):
     active_sessions: int
     total_gas_spent: int | None = None
     gas_balance: int | None = None
+    wallet_gas_balance: str | None = None
+
+
+class DashboardWalletBalanceRequest(Schema):
+    address: str
+    rpc_url: str
 
 
 @router.post("/register/", response=CertificateOut)
@@ -166,11 +174,16 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
 def compile_contract(request):
     success_process = []
     output_process = []
+    # Ensure contracts directory exists (create parent dirs if needed)
+    if not os.path.exists(manager.contracts_dir):
+        os.makedirs(manager.contracts_dir, exist_ok=True)
+    print(f"Compiling contracts in directory: {manager.contracts_dir}")
     contract_files = [
         os.path.join(manager.contracts_dir, file_name)
         for file_name in sorted(os.listdir(manager.contracts_dir))
         if os.path.isfile(os.path.join(manager.contracts_dir, file_name)) and file_name.endswith(".sol")
     ]
+    print(f"Found contract files: {contract_files}")
     for file_name in contract_files:
         try:
             print(f"Compiling contract: {file_name}")
@@ -179,11 +192,14 @@ def compile_contract(request):
                 capture_output=True,
                 text=True,
             )
-            print(result.stdout)
+            print(f"solc output for {file_name}:\n{result.stdout}\n{result.stderr}")
         except FileNotFoundError as e:
+            import traceback
+            tb = traceback.format_exc()
+            print(f"solc compiler not found. Traceback:\n{tb}")
             raise HttpError(
                 500,
-                "solc compiler not found. Please install solc and ensure it is in your PATH.",
+                "solc compiler not found. Please install solc and ensure it is in your PATH. Traceback: " + tb,
             ) from e
         success = result.returncode == 0
         output = result.stdout if success else result.stderr
@@ -196,11 +212,16 @@ def compile_contract(request):
 
 @router.post("/deploy/", response=DeployResponse)
 def deploy_contract(request):
+    manager.connect_web3()
+    if not manager.web3:
+        print("Deploying contracts...")
+        raise HttpError(500, "Web3 provider is not initialized. Cannot deploy contracts.")
     contract_files = [
         os.path.join(manager.contracts_dir, file_name)
         for file_name in sorted(os.listdir(manager.contracts_dir))
         if os.path.isfile(os.path.join(manager.contracts_dir, file_name)) and (file_name.endswith(".abi") or file_name.endswith(".bin"))
     ]
+    print(manager.contracts_dir)
     deployed_contracts = []
     errors = []
     for file_name in contract_files:
@@ -221,10 +242,9 @@ def deploy_contract(request):
             deployed_contracts.append(f"Contract deployed successfully: {addr}")
 
         except Exception as e:
-            import traceback
             tb = traceback.format_exc()
             print(f"Error deploying {file_name}: {e}\n{tb}")
-            errors.append(f"failed processing contract file: {file_name}. Error: {e}")
+            errors.append(f"failed processing contract file: {file_name}. Error: {e}. Traceback: {tb}")
     if errors:
         raise HttpError(500, " | ".join(errors))
     # Refresh contract manager state after deployment (address may have changed)
@@ -487,3 +507,11 @@ def dashboard_metrics(request):
         total_gas_spent=total_gas_spent,
         gas_balance=gas_balance,
     )
+
+
+@router.post("/dashboard/wallet_gas_balance", response=DashboardMetrics)
+def dashboard_wallet_gas_balance(request, data: DashboardWalletBalanceRequest):
+    # Use the wallet balance endpoint logic
+    balance_response = get_balance(request, data)
+    return DashboardMetrics(wallet_gas_balance=balance_response.balance)
+

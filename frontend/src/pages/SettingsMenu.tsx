@@ -9,8 +9,6 @@ import {
 } from '@elastic/eui';
 import axios from "axios";
 
-import { walletService } from '../services/api';
-
 const api = axios.create({
   baseURL: 'http://localhost:8000',
   timeout: 10000,
@@ -116,7 +114,6 @@ const GRID_SIZE = 3 * 4;
 const SettingsMenu: React.FC = () => {
   const [selected, setSelected] = useState<string[]>([]);
   const [address, setAddress] = useState<string>('');
-  const [isMetaMask, setIsMetaMask] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
 
@@ -127,7 +124,6 @@ const SettingsMenu: React.FC = () => {
         try {
           const accounts = await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
           setAddress(accounts[0]);
-          setIsMetaMask(true);
           alert(action.successMsg);
           setSelected(prev =>
             prev.includes(action.id)
@@ -159,17 +155,6 @@ const SettingsMenu: React.FC = () => {
     }
   };
 
-  const createWallet = async () => {
-    setError('');
-    setSuccess('');
-    try {
-      const res = await walletService.createWallet();
-      setSuccess('Create Wallet: ' + res.data.address);
-    } catch (err: any) {
-      setError('Wallet creation failed');
-    }
-  };
-
   const blankCount = GRID_SIZE - actions.length;
 
   return (
@@ -195,7 +180,7 @@ const SettingsMenu: React.FC = () => {
         {actions.map(action => (
           <EuiFlexItem key={action.id} style={{ minHeight: 150 }}>
             <EuiCard
-              icon={action.customIcon || <EuiIcon type={action.iconType} size="xxl" />}
+              icon={<EuiIcon type={action.iconType} size="xxl" />}
               title={action.title}
               textAlign="center"
               paddingSize="l"
