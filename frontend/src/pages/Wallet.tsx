@@ -386,30 +386,6 @@ const Wallet: React.FC = () => {
           <div><b>Balance:</b> {balance}</div>
         </EuiCallOut>
       )}
-      {/* Add Account Modal */}
-      {isAddAccountModalOpen && (
-        <div className="modal-backdrop">
-          <div className="modal-content">
-            <EuiTitle size="s"><h3>Add New Account</h3></EuiTitle>
-            <EuiSpacer size="m" />
-            <div style={{ marginBottom: 16 }}>
-              <label htmlFor="newAccountName"><b>Account Name</b></label>
-              <EuiFieldText id="newAccountName" value={newAccountName} onChange={e => setNewAccountName(e.target.value)} />
-            </div>
-            {addAccountError && <EuiCallOut title="Error" color="danger">{addAccountError}</EuiCallOut>}
-            <EuiSpacer size="m" />
-            <EuiButton onClick={handleAddAccount} isLoading={addAccountLoading} fill>
-              Create & Fund Account
-            </EuiButton>
-            <EuiButton color="danger" onClick={() => setIsAddAccountModalOpen(false)} style={{ marginLeft: 8 }}>
-              Cancel
-            </EuiButton>
-          </div>
-        </div>
-      )}
-
-
-
       {/* Wallet Creation and Import Section */}
       <EuiCard title="Wallets" layout="vertical">
           <EuiSpacer size="l" />
@@ -470,34 +446,48 @@ const Wallet: React.FC = () => {
         </EuiForm>
       </EuiCard>
       <EuiSpacer size="m" />
-      <EuiCard title="Accounts" layout="vertical">
-          {walletAccounts.length > 0 ? (
-            <EuiRadioGroup
-              options={accountRadioOptions}
-              idSelected={selectedAccountId || ''}
-              onChange={id => setSelectedAccountId(id)}
-              name="accountRadios"
-            />
-          ) : <span>No accounts for this wallet.</span>}
-        <EuiSpacer size="m" />
-        <EuiButton size="s" style={{ marginTop: 8 }} onClick={() => setIsAddAccountModalOpen(true)}>
-          + Add Account
-        </EuiButton>
-        <EuiSpacer    size="m" />
-        <EuiFormRow label="RPC URL">
-          <EuiFieldText value={rpcUrl} onChange={e => setRpcUrl(e.target.value)} />
-        </EuiFormRow>
-      </EuiCard>
+      <div style={{ display: 'flex', flexDirection: 'row', gap: '16px' }}>
+        <div style={{ flex: 1 }}>
+          <EuiCard title="Accounts" layout="vertical">
+              {walletAccounts.length > 0 ? (
+                <EuiRadioGroup
+                  options={accountRadioOptions}
+                  idSelected={selectedAccountId || ''}
+                  onChange={id => setSelectedAccountId(id)}
+                  name="accountRadios"
+                />
+              ) : <span>No accounts for this wallet.</span>}
+            <EuiSpacer size="m" />
+            <EuiButton size="s" style={{ marginTop: 8 }} onClick={() => setIsAddAccountModalOpen(true)}>
+              + Add Account
+            </EuiButton>
+            <EuiSpacer    size="m" />
+            <EuiFormRow label="RPC URL">
+              <EuiFieldText value={rpcUrl} onChange={e => setRpcUrl(e.target.value)} />
+            </EuiFormRow>
+          </EuiCard>
+        </div>
+        <div style={{ flex: 1 }}>
+          {isAddAccountModalOpen && (
+            <EuiCard title="Add New Account">
+                <EuiSpacer size="m" />
+                <div style={{ marginBottom: 16 }}>
+                  <label htmlFor="newAccountName"><b>Account Name</b></label>
+                  <EuiFieldText id="newAccountName" value={newAccountName} onChange={e => setNewAccountName(e.target.value)} />
+                </div>
+                {addAccountError && <EuiCallOut title="Error" color="danger">{addAccountError}</EuiCallOut>}
+                <EuiSpacer size="m" />
+                <EuiButton onClick={handleAddAccount} isLoading={addAccountLoading} fill>
+                  Create & Fund Account
+                </EuiButton>
+                <EuiButton color="danger" onClick={() => setIsAddAccountModalOpen(false)} style={{ marginLeft: 8 }}>
+                  Cancel
+                </EuiButton>
+            </EuiCard>
+          )}
+        </div>
+      </div>
       <EuiSpacer size="m" />
-
-      <EuiCard title="Accounts Details" layout="vertical">
-        <EuiBasicTable
-          items={Array.isArray(backendAccounts) ? backendAccounts : []}
-          columns={accountColumns}
-          rowHeader="name"
-        />
-      </EuiCard>
-      <EuiSpacer size="l" />
       <EuiCard title="Generate & Fund Accounts" layout="vertical">
         <EuiForm component="form">
           <EuiFormRow label="Number of Accounts">
@@ -524,6 +514,16 @@ const Wallet: React.FC = () => {
         )}
         <EuiSpacer size="l" />
       </EuiCard>
+      <EuiSpacer size="m" />
+      <EuiCard title="Accounts Details" layout="vertical">
+        <EuiBasicTable
+          items={Array.isArray(backendAccounts) ? backendAccounts : []}
+          columns={accountColumns}
+          rowHeader="name"
+        />
+      </EuiCard>
+      <EuiSpacer size="l" />
+
       <EuiSpacer size="l" />
       <EuiCard title="Sign Transaction / Message" layout="vertical">
         <div style={{ marginBottom: 16 }}>
