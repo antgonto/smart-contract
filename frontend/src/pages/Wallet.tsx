@@ -11,6 +11,7 @@ import {
   EuiTitle,
   EuiRadioGroup,
   EuiBasicTable,
+  EuiSelect,
 } from '@elastic/eui';
 import { createWallet, importWallet, getBalance, importWalletPrivateKey, generateAccountsAndFund, listWallets, signTransaction, signMessage } from '../services/walletService';
 import { persistAccount, persistTransaction } from '../services/api';
@@ -376,35 +377,8 @@ const Wallet: React.FC = () => {
       <EuiSpacer size="l" />
       {error && <EuiCallOut title="Error" color="danger" iconType="alert">{error}</EuiCallOut>}
       {success && <EuiCallOut title="Success" color="success" iconType="check">{success}</EuiCallOut>}
-      <EuiFormRow label="Select Wallet">
-        <select value={selectedWalletId || ''} onChange={e => setSelectedWalletId(e.target.value)}>
-          {walletOptions.length > 0 ? (
-            walletOptions.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.inputDisplay}</option>
-            ))
-          ) : (
-            <option value="" disabled>No wallets found. Please create a wallet.</option>
-          )}
-        </select>
-      </EuiFormRow>
       <EuiSpacer size="m" />
-      <EuiFormRow label="Accounts">
-        {walletAccounts.length > 0 ? (
-          <EuiRadioGroup
-            options={accountRadioOptions}
-            idSelected={selectedAccountId || ''}
-            onChange={id => setSelectedAccountId(id)}
-            name="accountRadios"
-          />
-        ) : <span>No accounts for this wallet.</span>}
-      </EuiFormRow>
-      <EuiButton size="s" style={{ marginTop: 8 }} onClick={() => setIsAddAccountModalOpen(true)}>
-        + Add Account
-      </EuiButton>
-      <EuiFormRow label="RPC URL">
-        <EuiFieldText value={rpcUrl} onChange={e => setRpcUrl(e.target.value)} />
-      </EuiFormRow>
-      <EuiSpacer size="m" />
+
       {selectedAccountId && (
         <EuiCallOut title="Selected Account Details" color="primary">
           <div><b>Name:</b> {walletAccounts.find(a => a.address === selectedAccountId)?.name}</div>
@@ -433,27 +407,90 @@ const Wallet: React.FC = () => {
           </div>
         </div>
       )}
+
+
+
       {/* Wallet Creation and Import Section */}
-      <EuiCard title="Create or Import Wallet" layout="vertical">
+      <EuiCard title="Wallets" layout="vertical">
+          <EuiSpacer size="l" />
+            <EuiFormRow label="Select Wallet">
+              <EuiSelect
+                options={walletOptions.map(opt => ({ value: opt.value, text: opt.inputDisplay }))}
+                value={selectedWalletId || ''}
+                onChange={e => setSelectedWalletId(e.target.value)}
+                fullWidth
+                disabled={walletOptions.length === 0}
+                aria-label="Select a wallet"
+              />
+            </EuiFormRow>
+          <EuiSpacer size="l" />
         <EuiForm component="form">
-          <EuiFormRow label="Wallet Name (for new wallet)">
-            <EuiFieldText value={walletName} onChange={e => setWalletName(e.target.value)} placeholder="Enter wallet name" />
-          </EuiFormRow>
-          <EuiButton fill onClick={handleCreate} isDisabled={!walletName}>Create Wallet</EuiButton>
-          <EuiSpacer size="m" />
-          <EuiFormRow label="Import Wallet by Mnemonic">
-            <EuiFieldText value={importMnemonic} onChange={e => setImportMnemonic(e.target.value)} placeholder="Enter mnemonic phrase" />
-          </EuiFormRow>
-          <EuiButton onClick={handleImportMnemonic} isDisabled={!importMnemonic}>Import by Mnemonic</EuiButton>
-          <EuiSpacer size="m" />
-          <EuiFormRow label="Import Wallet by Private Key">
-            <EuiFieldText value={importPrivKey} onChange={e => setImportPrivKey(e.target.value)} placeholder="Enter private key" />
-          </EuiFormRow>
-          <EuiButton onClick={handleImportPrivateKey} isDisabled={!importPrivKey}>Import by Private Key</EuiButton>
+            <EuiFormRow label="Wallet Name (for new wallet)">
+              <>
+                <EuiFieldText
+                  value={walletName}
+                  onChange={e => setWalletName(e.target.value)}
+                  placeholder="Enter wallet name"
+                />
+                <EuiButton fill onClick={handleCreate} isDisabled={!walletName}>
+                  Create Wallet
+                </EuiButton>
+              </>
+            </EuiFormRow>
+
+            <EuiSpacer size="m" />
+
+            <EuiFormRow label="Import Wallet by Mnemonic">
+              <>
+                <EuiFieldText
+                  value={importMnemonic}
+                  onChange={e => setImportMnemonic(e.target.value)}
+                  placeholder="Enter mnemonic phrase"
+                />
+                <EuiButton onClick={handleImportMnemonic} isDisabled={!importMnemonic}>
+                  Import by Mnemonic
+                </EuiButton>
+              </>
+            </EuiFormRow>
+
+            <EuiSpacer size="m" />
+
+            <EuiFormRow label="Import Wallet by Private Key">
+              <>
+                <EuiFieldText
+                  value={importPrivKey}
+                  onChange={e => setImportPrivKey(e.target.value)}
+                  placeholder="Enter private key"
+                />
+                <EuiButton onClick={handleImportPrivateKey} isDisabled={!importPrivKey}>
+                  Import by Private Key
+                </EuiButton>
+              </>
+            </EuiFormRow>
         </EuiForm>
       </EuiCard>
       <EuiSpacer size="m" />
-      <EuiCard title="Your Accounts" layout="vertical">
+      <EuiCard title="Accounts" layout="vertical">
+          {walletAccounts.length > 0 ? (
+            <EuiRadioGroup
+              options={accountRadioOptions}
+              idSelected={selectedAccountId || ''}
+              onChange={id => setSelectedAccountId(id)}
+              name="accountRadios"
+            />
+          ) : <span>No accounts for this wallet.</span>}
+        <EuiSpacer size="m" />
+        <EuiButton size="s" style={{ marginTop: 8 }} onClick={() => setIsAddAccountModalOpen(true)}>
+          + Add Account
+        </EuiButton>
+        <EuiSpacer    size="m" />
+        <EuiFormRow label="RPC URL">
+          <EuiFieldText value={rpcUrl} onChange={e => setRpcUrl(e.target.value)} />
+        </EuiFormRow>
+      </EuiCard>
+      <EuiSpacer size="m" />
+
+      <EuiCard title="Accounts Details" layout="vertical">
         <EuiBasicTable
           items={Array.isArray(backendAccounts) ? backendAccounts : []}
           columns={accountColumns}

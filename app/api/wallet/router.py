@@ -136,7 +136,18 @@ class AccountListItem(BaseModel):
 @router.post("/wallet/create", response=WalletCreateResponse)
 def create_wallet(request, data: WalletCreateRequest):
     user = request.user if hasattr(request, 'user') and request.user.is_authenticated else None
+    # generate mnemonic and derive account
+    generator = Mnemonic("english")
+    mnemonic = generator.generate(strength=128)
+    acct = EthAccount.from_mnemonic(mnemonic, account_path="m/44'/60'/0'/0/0")
+    address = acct.address
+    private_key = acct.key.hex()
+    # create wallet record
     wallet = Wallet.objects.create(user=user, name=data.name)
+    # store credentials in a file named after the wallet
+    filename = f"{data.name}.txt"
+    with open(filename, 'w') as f:
+        f.write(f"address: {address}\nprivate_key: {private_key}\nmnemonic: {mnemonic}\n")
     return WalletCreateResponse(id=wallet.id, name=wallet.name, created_at=wallet.created_at.isoformat())
 
 @router.get("/wallet/list", response=list[WalletListItem])
@@ -155,7 +166,7 @@ def import_wallet_private_key(request, data: WalletImportPrivateKeyRequest):
     pk = data.private_key
     if not pk.startswith('0x'):
         pk = '0x' + pk
-    acct = Account.from_key(pk)
+    acct = EthAccount.from_key(pk)
     return WalletImportPrivateKeyResponse(address=acct.address, private_key=pk)
 
 @router.post("/balance", response=WalletBalanceResponse)
