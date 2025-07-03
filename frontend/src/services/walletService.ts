@@ -36,7 +36,7 @@ export async function generateAccountsAndFund(params: {
 export async function listWallets() {
   try {
     const res = await axios.get(`${API_BASE}/wallet/list`);
-    return res.data;
+    return Array.isArray(res.data) ? res.data : [];
   } catch (err: any) {
     if (err.response && err.response.status === 404) {
       // Treat 404 as empty list (no wallets/accounts)

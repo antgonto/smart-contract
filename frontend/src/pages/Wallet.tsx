@@ -20,7 +20,7 @@ import axios from "axios";
 
 const DEFAULT_RPC_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:8545' : 'http://ganache:8545';
 
-const API_BASE = (process.env.REACT_APP_API_URL || '') + '/app/v1/smartcontracts/wallet'; // Use relative path for proxy compatibility
+const API_BASE = '/app/v1/smartcontracts/wallet'; // Use relative path for proxy compatibility
 
 const Wallet: React.FC = () => {
   const [walletName, setWalletName] = useState('');
@@ -88,7 +88,13 @@ const Wallet: React.FC = () => {
         // Replace with your backend call to list wallets
         const walletsList = await listWallets();
         setWallets(walletsList);
-        if (walletsList.length > 0) setSelectedWalletId(walletsList[0].id || walletsList[0]._id || walletsList[0].address);
+        // Only set selectedWalletId if wallets exist
+        if (walletsList.length > 0) {
+          setSelectedWalletId(walletsList[0].id || walletsList[0]._id || walletsList[0].address);
+        } else {
+          setSelectedWalletId(null);
+        }
+        // Do not set error if just empty
       } catch (e) {
         setError('Failed to load wallets');
       }
@@ -372,9 +378,13 @@ const Wallet: React.FC = () => {
       {success && <EuiCallOut title="Success" color="success" iconType="check">{success}</EuiCallOut>}
       <EuiFormRow label="Select Wallet">
         <select value={selectedWalletId || ''} onChange={e => setSelectedWalletId(e.target.value)}>
-          {walletOptions.map(opt => (
-            <option key={opt.value} value={opt.value}>{opt.inputDisplay}</option>
-          ))}
+          {walletOptions.length > 0 ? (
+            walletOptions.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.inputDisplay}</option>
+            ))
+          ) : (
+            <option value="" disabled>No wallets found. Please create a wallet.</option>
+          )}
         </select>
       </EuiFormRow>
       <EuiSpacer size="m" />
