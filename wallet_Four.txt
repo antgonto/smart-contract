@@ -1,0 +1,3 @@
+Address: 0x88b077965B769c9E340886DB75f7007477b6b7Bf
+Private Key: 092aa0c39851c2fb5ac29f31c3461c2576ebedbd620a54fbf59b8ba1bf278c57
+Mnemonic: cinnamon rhythm timber fork key run gaze weapon disease crystal photo aim
