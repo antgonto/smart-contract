@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
+
+contract CertificateRegistry is AccessControl {
+    using Counters for Counters.Counter;
+
+    bytes32 public constant ISSUER_ROLE = keccak256("ISSUER_ROLE");
+
+    struct Certificate {
+        bytes32 certHash;
+        address issuer;
+        address student; // Changed from recipient
+        uint256 issuedAt;
+        string ipfsCid; // Changed from metadata
+        bool isRevoked;
+    }
+
+    mapping(bytes32 => Certificate) public certificates;
+    mapping(address => bytes32[]) public certificatesByStudent; // Changed from certificatesByRecipient
+
+    event CertificateRegistered(bytes32 indexed certHash, address indexed issuer, address indexed student, uint256 issuedAt, string ipfsCid);
+    event CertificateRevoked(bytes32 indexed certHash);
+
+    constructor() {
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(ISSUER_ROLE, msg.sender);
+    }
+
+    function registerCertificate(bytes32 certHash, address student, string calldata ipfsCid) external onlyRole(ISSUER_ROLE) {
+        require(certificates[certHash].issuedAt == 0, "Certificate already exists");
+
+        Certificate memory cert = Certificate({
+            certHash: certHash,
+            issuer: msg.sender,
+            student: student,
+            issuedAt: block.timestamp,
+            ipfsCid: ipfsCid,
+            isRevoked: false
+        });
+
+        certificates[certHash] = cert;
+        certificatesByStudent[student].push(certHash);
+
+        emit CertificateRegistered(certHash, msg.sender, student, block.timestamp, ipfsCid);
+    }
+
+    function revokeCertificate(bytes32 certHash) external onlyRole(ISSUER_ROLE) {
+        require(certificates[certHash].issuedAt != 0, "Certificate does not exist");
+        require(!certificates[certHash].isRevoked, "Certificate already revoked");
+
+        certificates[certHash].isRevoked = true;
+        emit CertificateRevoked(certHash);
+    }
+
+    function getCertificate(bytes32 certHash) external view returns (address issuer, address student, uint256 timestamp, bool isRevoked) {
+        require(certificates[certHash].issuedAt != 0, "Certificate does not exist");
+        Certificate memory cert = certificates[certHash];
+        return (cert.issuer, cert.student, cert.issuedAt, cert.isRevoked);
+    }
+
+    function getCertificatesByStudent(address student) external view returns (bytes32[] memory) {
+        return certificatesByStudent[student];
+    }
+
+    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+        return interfaceId == type(IAccessControl).interfaceId || super.supportsInterface(interfaceId);
+    }
+}

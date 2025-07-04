@@ -1,133 +1,91 @@
 import React, { useEffect, useState } from 'react';
 import {
   EuiPanel,
-  EuiTitle,
   EuiText,
   EuiPageHeader,
   EuiPageTemplate,
   EuiSpacer,
   EuiBasicTable,
+  EuiCallOut,
+  EuiLoadingSpinner,
 } from '@elastic/eui';
-import {
-  fetchCertificates,
-  downloadCertificateOffchain, fetchDashboardMetrics
-} from '../services/api';
-
-const recentOpsColumns = [
-  { field: 'timestamp', name: 'Timestamp', width: '10%' },
-  { field: 'actor', name: 'Actor', width: '30%' },
-  { field: 'operation', name: 'Operation', width: '10%' },
-  { field: 'type', name: 'Type', width: '10%' },
-  { field: 'gas_used', name: 'Gas Used', width: '10%' },
-];
-
-  const downloadCertificate = async(ipfsHash: string) => {
-    try {
-      const blob = await downloadCertificateOffchain(ipfsHash);
-      const url = window.URL.createObjectURL(new Blob([blob]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${ipfsHash}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.parentNode?.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (e) {
-      alert('Failed to download certificate.');
-    }
-  };
+import { useAuth } from '../contexts/AuthContext';
+import api from '../services/api';
 
 const certificateColumns = [
-  { field: 'id', name: 'ID', width: '2%' },
-  { field: 'block_number', name: 'Block Number', width: '7%' },
-  { field: 'cert_hash', name: 'On-chain Certificate Hash', width: '35%' },
-  { field: 'ipfs_hash', name: 'Off-chain Certificate Hash', width: '30%'},
-  { field: 'gas_used', name: 'Gas Used', width: '6%' },
-  { field: 'cumulative_gas', name: 'Cumulative Gas', width: '10%' },
-  {
-    name: 'Download Off-chain',
-    render: (item: any) => (
-      item.ipfs_hash ? (
-        <button onClick={() => downloadCertificate(item.ipfs_hash)}>Download PDF</button>
-      ) : (
-        <span style={{ color: '#888' }}>Not available</span>
-      )
-    ),
-  },
+  { field: 'hash', name: 'Certificate Hash', width: '40%' },
+  { field: 'issuer', name: 'Issuer', width: '30%' },
+  { field: 'timestamp', name: 'Issued At', render: (item: any) => new Date(item.timestamp * 1000).toLocaleString() },
+  { field: 'is_revoked', name: 'Revoked', render: (revoked: boolean) => (revoked ? 'Yes' : 'No') },
 ];
 
-const CertificatesList  = () => {
-  const [metrics, setMetrics] = useState<any>(null);
+const CertificatesList = () => {
+  const { isAuthenticated } = useAuth();
+  const [certificates, setCertificates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [certificates, setCertificates] = useState<any[]>([]);
 
   useEffect(() => {
-    fetchDashboardMetrics()
-      .then(data => {
-        setMetrics(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        setError('Failed to load dashboard metrics');
-        setLoading(false);
-      });
-    fetchCertificates()
-      .then((data) => {
-        setCertificates(data.certificates.map((item: any, idx: number) => ({ id: idx + 1, ...item })));
-        setLoading(false);
-      })
-      .catch(() => setCertificates([]));
-  }, []);
+    if (isAuthenticated) {
+      const fetchCertificates = async () => {
+        try {
+          setLoading(true);
+          const response = await api.get('/student/certificates');
+          setCertificates(response.data);
+        } catch (err: any) {
+          setError(err.response?.data?.error || 'Failed to load certificates.');
+        } finally {
+          setLoading(false);
+        }
+      };
 
-  // Compute cumulative gas for recent operations
-  let cumulativeGas = 0;
-  const recentOpsWithCumulative = metrics?.recent_operations?.map((op: any) => {
-    cumulativeGas += op.gas_used || 0;
-    return { ...op, cumulative_gas: cumulativeGas };
-  }) || [];
+      fetchCertificates();
+    }
+  }, [isAuthenticated]);
 
-  // Compute cumulative gas for certificates
-  let certCumulativeGas = 0;
-  const certificatesWithCumulative = certificates.map((cert: any) => {
-    certCumulativeGas += cert.gas_used || 0;
-    return { ...cert, cumulative_gas: certCumulativeGas };
-  });
+  if (!isAuthenticated) {
+    return (
+      <EuiPanel style={{ maxWidth: 800, margin: '40px auto' }}>
+        <EuiCallOut color="primary" title="Please Login">
+          <p>You need to log in with your wallet to view your certificates.</p>
+        </EuiCallOut>
+      </EuiPanel>
+    );
+  }
 
-  if (loading) return <EuiText><p>Loading dashboard...</p></EuiText>;
-  if (error) return <EuiText color="danger"><p>{error}</p></EuiText>;
+  if (loading) {
+    return (
+      <EuiPanel style={{ maxWidth: 800, margin: '40px auto', textAlign: 'center' }}>
+        <EuiLoadingSpinner size="xl" />
+        <EuiSpacer />
+        <EuiText>Loading your certificates...</EuiText>
+      </EuiPanel>
+    );
+  }
+
+  if (error) {
+    return (
+      <EuiPanel style={{ maxWidth: 800, margin: '40px auto' }}>
+        <EuiCallOut color="danger" title="Error">
+          <p>{error}</p>
+        </EuiCallOut>
+      </EuiPanel>
+    );
+  }
 
   return (
-    <>
-      <EuiPageHeader>
-        <EuiTitle size="l">
-          <h1>Certificate Dashboard</h1>
-        </EuiTitle>
-      </EuiPageHeader>
-      <EuiPageTemplate>
-        <EuiSpacer size="l" />
-        {/* Recent Operations Table */}
-        <EuiPanel paddingSize="l">
-          <EuiTitle size="s"><h2>Recent Operations</h2></EuiTitle>
-          <EuiSpacer size="m" />
-          <EuiBasicTable items={recentOpsWithCumulative} columns={recentOpsColumns} />
-        </EuiPanel>
-        <EuiSpacer size="l" />
-        {/* Certificates Table */}
-        <EuiPanel paddingSize="l">
-          <EuiTitle size="s"><h2>Certificates</h2></EuiTitle>
-          <EuiSpacer size="m" />
-          <EuiBasicTable
-            items={certificatesWithCumulative}
-            columns={certificateColumns}
-            rowHeader="id"
-            tableLayout="auto"
-          />
-        </EuiPanel>
-        <EuiSpacer size="l" />
-      </EuiPageTemplate>
-    </>
+    <EuiPageTemplate>
+      <EuiPageHeader pageTitle="My Certificates" />
+      <EuiSpacer />
+      <EuiPanel>
+        <EuiBasicTable
+          items={certificates}
+          columns={certificateColumns}
+          noItemsMessage={loading ? 'Loading certificates...' : 'You have no certificates registered to your address.'}
+        />
+      </EuiPanel>
+    </EuiPageTemplate>
   );
 };
 
-export default CertificatesList ;
+export default CertificatesList;

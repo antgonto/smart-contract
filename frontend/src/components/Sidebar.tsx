@@ -6,58 +6,76 @@ import {
   EuiFlexGroup,
   EuiFlexItem,
   EuiText,
+  EuiButton,
 } from '@elastic/eui';
 import { useNavigate, useLocation } from 'react-router-dom';
-
+import { useAuth } from '../contexts/AuthContext';
+import { Login } from './Login';
 
 const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAuthenticated, address, logout, roles } = useAuth();
   const [isConfirmModalVisible, setIsConfirmModalVisible] = React.useState(false);
   const showConfirmModal = () => setIsConfirmModalVisible(true);
   const closeConfirmModal = () => setIsConfirmModalVisible(false);
+
+  const allNavItems = [
+    {
+      id: '1',
+      name: 'Telemetry Dashboard',
+      onClick: () => navigate('/'),
+      isSelected: location.pathname === '/',
+      icon: <EuiIcon type="dashboardApp" />
+    },
+    {
+      id: 'issuer-dashboard',
+      name: 'Issuer Dashboard',
+      onClick: () => navigate('/issuer-dashboard'),
+      isSelected: location.pathname === '/issuer-dashboard',
+      icon: <EuiIcon type="user" />,
+      isIssuer: true,
+    },
+    {
+      id: '2',
+      name: 'Register Certificate',
+      onClick: () => navigate('/register-certificate'),
+      isSelected: location.pathname === '/register-certificate',
+      icon: <EuiIcon type="document" />,
+      isIssuer: true,
+    },
+    {
+      id: '3',
+      name: 'My Certificates',
+      onClick: () => navigate('/certificates'),
+      isSelected: location.pathname === '/certificates',
+      icon: <EuiIcon type="indexOpen" />,
+    },
+    {
+      id: '4',
+      name: 'Transactions',
+      onClick: () => navigate('/wallet'),
+      isSelected: location.pathname === '/wallet',
+      icon: <EuiIcon type="currency" />,
+    },
+    {
+      id: '5',
+      name: 'Settings',
+      onClick: () => navigate('/settings'),
+      isSelected: location.pathname === '/settings',
+      icon: <EuiIcon type="gear" />,
+    },
+  ];
+
+  const visibleItems = isAuthenticated
+    ? allNavItems.filter(item => !item.isIssuer || roles.includes('issuer'))
+    : [];
 
   const sideNavItems = [
     {
       name: 'Blockchain Platform',
       id: 0,
-      items: [
-        {
-          id: '1',
-          name: 'Telemetry Dashboard',
-          onClick: () => navigate('/'),
-          isSelected: location.pathname === '/',
-          icon: <EuiIcon type="dashboardApp" />
-        },
-        {
-          id: '2',
-          name: 'Register Certificate',
-          onClick: () => navigate('/register-certificate'),
-          isSelected: location.pathname === '/register-certificate',
-          icon: <EuiIcon type="document" />,
-        },
-        {
-          id: '3',
-          name: 'Certificates',
-          onClick: () => navigate('/certificates'),
-          isSelected: location.pathname === '/certificates',
-          icon: <EuiIcon type="indexOpen" />,
-        },
-        {
-          id: '4',
-          name: 'Transactions',
-          onClick: () => navigate('/wallet'),
-          isSelected: location.pathname === '/wallet',
-          icon: <EuiIcon type="currency" />,
-        },
-        {
-          id: '5',
-          name: 'Settings',
-          onClick: () => navigate('/settings'),
-          isSelected: location.pathname === '/settings',
-          icon: <EuiIcon type="gear" />,
-        },
-      ]
+      items: visibleItems,
     }
   ];
 
@@ -75,6 +93,25 @@ const Sidebar = () => {
       </EuiFlexGroup>
       <EuiSpacer size="l" />
       <EuiSideNav items={sideNavItems} />
+
+      <div style={{ position: 'absolute', bottom: '20px', width: 'calc(100% - 32px)' }}>
+        {isAuthenticated ? (
+          <EuiFlexGroup direction="column" alignItems="center" gutterSize="s">
+            <EuiFlexItem>
+              <EuiText size="xs">
+                {address ? `${address.substring(0, 6)}...${address.substring(address.length - 4)}` : ''}
+              </EuiText>
+            </EuiFlexItem>
+            <EuiFlexItem>
+              <EuiButton size="s" onClick={logout} fullWidth>
+                Logout
+              </EuiButton>
+            </EuiFlexItem>
+          </EuiFlexGroup>
+        ) : (
+          <Login />
+        )}
+      </div>
 
       {isConfirmModalVisible && (
         <div className="confirm-modal" style={{

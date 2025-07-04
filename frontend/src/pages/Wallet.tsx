@@ -472,7 +472,7 @@ const Wallet: React.FC = () => {
             <EuiCard title="Add New Account">
                 <EuiSpacer size="m" />
                 <div style={{ marginBottom: 16 }}>
-                  <label htmlFor="newAccountName"><b>Account Name</b></label>
+                  <label htmlFor="newAccountName" style={{ display: 'block', textAlign: 'left', marginBottom: '8px' }}><b>Account Name</b></label>
                   <EuiFieldText id="newAccountName" value={newAccountName} onChange={e => setNewAccountName(e.target.value)} />
                 </div>
                 {addAccountError && <EuiCallOut title="Error" color="danger">{addAccountError}</EuiCallOut>}
