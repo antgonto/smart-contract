@@ -2,19 +2,17 @@ from ninja import Router
 from eth_account import Account as EthAccount
 from web3 import Web3
 import os
-
-GANACHE_URL = os.getenv('GANACHE_URL', 'http://ganache:8545')
-GANACHE_PRIVATE_KEY = os.getenv('GANACHE_PRIVATE_KEY')  # Optional: can use the first Ganache account
-FUND_AMOUNT_ETHER = float(os.getenv('FUND_AMOUNT_ETHER', '1'))  # Default: 1 ETH
-
 from django.conf import settings
 from pydantic import BaseModel
 from mnemonic import Mnemonic
 from web3.middleware import geth_poa_middleware
-
 import json
 from app.models import Account, Transaction, Wallet, CustomUser
 from django.db import transaction as db_transaction
+
+GANACHE_URL = os.getenv('GANACHE_URL', 'http://ganache:8545')
+GANACHE_PRIVATE_KEY = os.getenv('GANACHE_PRIVATE_KEY')  # Optional: can use the first Ganache account
+FUND_AMOUNT_ETHER = float(os.getenv('FUND_AMOUNT_ETHER', '1'))  # Default: 1 ETH
 
 router = Router(tags=["wallet"])
 
@@ -145,6 +143,22 @@ class AccountListItem(BaseModel):
     created_at: str
     balance: str | None = None
 
+# Add contract ABI and address loading
+CONTRACTS_DIR = os.path.join(settings.BASE_DIR, 'contracts')
+CONTRACT_ABI_PATH = os.path.join(CONTRACTS_DIR, 'CertificateRegistry.abi')
+CONTRACT_ADDRESS_PATH = os.path.join(CONTRACTS_DIR, 'CertificateRegistry.txt')
+
+def get_certificate_registry_contract():
+    if not os.path.exists(CONTRACT_ABI_PATH):
+        raise FileNotFoundError(f"Contract ABI file not found: {CONTRACT_ABI_PATH}. Please compile the contract first.")
+    if not os.path.exists(CONTRACT_ADDRESS_PATH):
+        raise FileNotFoundError(f"Contract address file not found: {CONTRACT_ADDRESS_PATH}. Please deploy the contract first.")
+    with open(CONTRACT_ABI_PATH) as f:
+        abi = json.load(f)
+    with open(CONTRACT_ADDRESS_PATH) as f:
+        address = f.read().strip()
+    return abi, address
+
 @router.post("/create", response=WalletCreateResponse)
 def create_wallet(request, data: WalletCreateRequest):
     user = request.user if hasattr(request, 'user') and request.user.is_authenticated else None
@@ -188,6 +202,23 @@ def create_wallet(request, data: WalletCreateRequest):
     tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
     # Optionally, wait for receipt
     w3.eth.wait_for_transaction_receipt(tx_hash)
+    # After funding the new wallet, if role is issuer, grant on-chain role
+    if data.role == 'issuer':
+        w3 = Web3(Web3.HTTPProvider(GANACHE_URL))
+        abi, contract_address = get_certificate_registry_contract()
+        contract = w3.eth.contract(address=Web3.to_checksum_address(contract_address), abi=abi)
+        admin_private_key = os.environ.get('GANACHE_FUNDER_PRIVATE_KEY') or GANACHE_PRIVATE_KEY
+        admin_account = w3.eth.account.from_key(admin_private_key)
+        nonce = w3.eth.get_transaction_count(admin_account.address)
+        tx = contract.functions.grantIssuerRole(address).build_transaction({
+            'from': admin_account.address,
+            'nonce': nonce,
+            'gas': 200000,
+            'gasPrice': w3.to_wei('1', 'gwei'),
+        })
+        signed_tx = admin_account.sign_transaction(tx)
+        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+        w3.eth.wait_for_transaction_receipt(tx_hash)
     return WalletCreateResponse(id=wallet.id, name=wallet.name, created_at=wallet.created_at.isoformat())
 
 @router.get("/list", response=list[WalletListItem])

@@ -172,6 +172,7 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
 
 @router.post("/compile/", response=CompileResponse)
 def compile_contract(request):
+    print("Compiling contracts...")
     success_process = []
     output_process = []
     # Ensure contracts directory exists (create parent dirs if needed)
@@ -188,7 +189,18 @@ def compile_contract(request):
         try:
             print(f"Compiling contract: {file_name}")
             result = run(
-                ["solc", "--overwrite", "--bin", "--abi", file_name, "-o", manager.contracts_dir],
+                [
+                    "solc",
+                    "--overwrite",
+                    "--bin",
+                    "--abi",
+                    file_name,
+                    "-o",
+                    manager.contracts_dir,
+                    "--base-path", "/opt/project",
+                    "--include-path", "/opt/project/node_modules",
+                    "--include-path", "/opt/project/contracts"
+                ],
                 capture_output=True,
                 text=True,
             )
@@ -219,37 +231,34 @@ def deploy_contract(request):
     contract_files = [
         os.path.join(manager.contracts_dir, file_name)
         for file_name in sorted(os.listdir(manager.contracts_dir))
-        if os.path.isfile(os.path.join(manager.contracts_dir, file_name)) and (file_name.endswith(".abi") or file_name.endswith(".bin"))
+        if os.path.isfile(os.path.join(manager.contracts_dir, file_name)) and file_name.endswith(".sol")
     ]
     print(manager.contracts_dir)
     deployed_contracts = []
     errors = []
     for file_name in contract_files:
+        base_filename = file_name.rsplit(".", 1)[0]
+        abi_file = f"{base_filename}.abi"
+        bin_file = f"{base_filename}.bin"
+        # Only deploy if both ABI and BIN exist (i.e., contract has been compiled)
+        if not (os.path.exists(abi_file) and os.path.exists(bin_file)):
+            errors.append(f"Contract {base_filename} has not been compiled. Skipping deployment.")
+            continue
         try:
-            base_filename = file_name.split(".")[0]
-            abi_file = f"{base_filename}.abi"
-            bin_file = f"{base_filename}.bin"
-
-            if not os.path.exists(abi_file) or not os.path.exists(bin_file):
-                raise Exception(f"ABI or BIN file missing for {base_filename}")
-
-            # Use the correct web3 instance and get accounts from it
             sender_account = manager.web3.eth.accounts[1]
             addr = SEEDWeb3.deploy_contract(manager.web3, sender_account, abi_file, bin_file, None)
-
             with open(f"{base_filename}.txt", "w") as fd:
                 fd.write(addr)
             deployed_contracts.append(f"Contract deployed successfully: {addr}")
-
         except Exception as e:
             tb = traceback.format_exc()
             print(f"Error deploying {file_name}: {e}\n{tb}")
             errors.append(f"failed processing contract file: {file_name}. Error: {e}. Traceback: {tb}")
-    if errors:
+    if errors and not deployed_contracts:
         raise HttpError(500, " | ".join(errors))
     # Refresh contract manager state after deployment (address may have changed)
     manager.refresh()
-    return DeployResponse(success=[True], output=deployed_contracts)
+    return DeployResponse(success=[True]*len(deployed_contracts), output=deployed_contracts + errors)
 
 @router.post("/upload_offchain", response=CertificateResponse)
 def upload_certificate_offchain(request, file, payload):

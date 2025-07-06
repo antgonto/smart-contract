@@ -23,12 +23,16 @@ class VerificationResult(BaseModel):
     timestamp: int = None
     error: str = None
 
-# --- Contract Setup ---
-w3 = Web3(Web3.HTTPProvider(os.environ.get('WEB3_RPC')))
-contract_address = os.environ.get('CERTIFICATE_REGISTRY_ADDRESS')
-with open(os.path.join(settings.BASE_DIR, 'contracts/CertificateRegistry.abi')) as f:
-    abi = f.read()
-contract = w3.eth.contract(address=contract_address, abi=abi)
+def get_contract():
+    w3 = Web3(Web3.HTTPProvider(os.environ.get('WEB3_RPC')))
+    contract_address = os.environ.get('CERTIFICATE_REGISTRY_ADDRESS')
+    abi_path = os.path.join(settings.BASE_DIR, 'contracts/CertificateRegistry.abi')
+    if not os.path.exists(abi_path):
+        raise FileNotFoundError(f"Contract ABI file not found: {abi_path}. Please compile the contract first.")
+    with open(abi_path) as f:
+        abi = f.read()
+    contract = w3.eth.contract(address=contract_address, abi=abi)
+    return w3, contract
 
 @router.post("/verify/{certificate_hash}", response=VerificationResult)
 @ratelimit(key='ip', rate='100/h', block=True)
@@ -53,6 +57,7 @@ def verify_certificate(request, certificate_hash: str, payload: RecaptchaPayload
         return JsonResponse({"error": "Invalid reCAPTCHA"}, status=400)
 
     try:
+        w3, contract = get_contract()
         cert_data = contract.functions.getCertificate(w3.to_bytes(hexstr=certificate_hash)).call()
         # cert_data is a tuple: (issuer, student, timestamp, isRevoked)
         issuer, student, timestamp, is_revoked = cert_data

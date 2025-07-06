@@ -25,6 +25,10 @@ RUN apt-get update && apt-get install -y wget && \
 
 COPY . .
 
+COPY package.json ./
+COPY package-lock.json* ./
+RUN npm install
+
 RUN chown -R 1001:1001 /code
 
 RUN chmod -R ug+rw /code

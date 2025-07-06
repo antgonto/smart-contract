@@ -2,11 +2,8 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
 
 contract CertificateRegistry is AccessControl {
-    using Counters for Counters.Counter;
-
     bytes32 public constant ISSUER_ROLE = keccak256("ISSUER_ROLE");
 
     struct Certificate {
@@ -63,6 +60,16 @@ contract CertificateRegistry is AccessControl {
 
     function getCertificatesByStudent(address student) external view returns (bytes32[] memory) {
         return certificatesByStudent[student];
+    }
+
+    // Add a function to allow admin to grant ISSUER_ROLE to an address
+    function grantIssuerRole(address account) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        _grantRole(ISSUER_ROLE, account);
+    }
+
+    // Add a function to allow admin to revoke ISSUER_ROLE from an address
+    function revokeIssuerRole(address account) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        _revokeRole(ISSUER_ROLE, account);
     }
 
     function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
