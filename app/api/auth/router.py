@@ -101,8 +101,14 @@ def login(request, login_data: LoginRequest):
 
     try:
         contract = manager.get_contract()
-        issuer_role =     contract.functions.ISSUER_ROLE().call()
-        if     contract.functions.hasRole(issuer_role, address).call():
+        if contract is None:
+            # Try to deploy the contract automatically if not found
+            from app.api.smartcontract.router import deploy_contract
+            deploy_contract(request)
+            manager.refresh()
+            contract = manager.get_contract()
+        issuer_role = contract.functions.ISSUER_ROLE().call()
+        if contract.functions.hasRole(issuer_role, address).call():
             roles.append("issuer")
     except Exception as e:
         # Could fail if contract not deployed or other issue. Log this.

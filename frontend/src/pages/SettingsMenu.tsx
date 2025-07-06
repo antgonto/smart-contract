@@ -34,14 +34,6 @@ const actions = [
       errorMsg: 'Failed to to deploy the contracts: ',
       iconType: 'launch',
     },
-    {
-      id: 'connect-metamask',
-      title: 'Connect MetaMask',
-      url: null,
-      successMsg: 'MetaMask connected successfully.',
-      errorMsg: 'MetaMask connection failed: ',
-      iconType: 'discoverApp',
-    },
 ];
 
 // 5 columns x 4 rows = 20 tiles total

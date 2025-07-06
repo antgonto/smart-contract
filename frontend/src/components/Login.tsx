@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
 import { EuiButton, EuiText, EuiFieldText, EuiSpacer, EuiModal, EuiModalHeader, EuiModalBody, EuiModalFooter, EuiFieldPassword } from '@elastic/eui';
+import { useNavigate } from 'react-router-dom';
+import { ethers } from 'ethers';
 
 interface LoginProps {
     isOpen: boolean;
@@ -17,6 +19,7 @@ export const Login: React.FC<LoginProps> = ({ isOpen, onClose, loginType }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const { login, adminLogin } = useAuth();
+    const navigate = useNavigate();
 
     // Reset state when modal is closed or login type changes
     useEffect(() => {
@@ -46,6 +49,7 @@ export const Login: React.FC<LoginProps> = ({ isOpen, onClose, loginType }) => {
         try {
             await adminLogin(username, password);
             onClose();
+            navigate('/');
         } catch (err: any) {
             setError(err.response?.data?.error || 'Failed to login as admin.');
         }
@@ -54,9 +58,12 @@ export const Login: React.FC<LoginProps> = ({ isOpen, onClose, loginType }) => {
     const handleLogin = async () => {
         setError(null);
         try {
+            // Sign the nonce (challenge) with the private key using ethers.js
+            const wallet = new ethers.Wallet(privateKey);
+            const signature = await wallet.signMessage(nonce);
             const loginResponse = await api.post('/app/v1/smartcontracts/auth/login', {
                 address,
-                signature: privateKey, // Directly using private key to sign on backend/service layer if that is the flow
+                signature, // Send the signature, not the private key
             });
             const { access } = loginResponse.data;
             login(access);

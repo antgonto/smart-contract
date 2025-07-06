@@ -31,7 +31,14 @@ const CertificatesList = () => {
         try {
           setLoading(true);
           const certificatesData = await fetchCertificates();
-          setCertificates(certificatesData);
+          // Defensive: support both array and object API responses
+          if (Array.isArray(certificatesData)) {
+            setCertificates(certificatesData);
+          } else if (certificatesData && Array.isArray(certificatesData.certificates)) {
+            setCertificates(certificatesData.certificates);
+          } else {
+            setCertificates([]);
+          }
         } catch (err: any) {
           setError(err.response?.data?.error || 'Failed to load certificates.');
         } finally {

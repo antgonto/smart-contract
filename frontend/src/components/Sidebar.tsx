@@ -6,7 +6,6 @@ import {
   EuiFlexGroup,
   EuiFlexItem,
   EuiText,
-  EuiButton,
 } from '@elastic/eui';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -81,7 +80,11 @@ const Sidebar = () => {
   const adminLoginNavItem = {
     id: 'admin-login',
     name: 'Admin Login',
-    onClick: () => navigate('/admin-login'),
+    onClick: () => {
+      navigate('/admin-login');
+      // After successful login, redirect to root
+      // This requires handling in the login logic/modal, not just here
+    },
     icon: <EuiIcon type="user" />,
   };
 
@@ -95,33 +98,52 @@ const Sidebar = () => {
     icon: <EuiIcon type="user" />,
   };
 
+  // Add logout nav item for authenticated users
+  const logoutNavItem = {
+    id: 'logout',
+    name: 'Logout',
+    icon: <EuiIcon type="exit" />,
+    onClick: () => {
+      logout();
+      navigate('/');
+    },
+    isSelected: false,
+  };
+
+  // Show user/address label above nav
+  const userLabel = (
+    <EuiText size="xs" style={{ marginBottom: 12, textAlign: 'center' }}>
+      {roles.includes('admin')
+        ? 'Admin'
+        : address
+        ? `${address.substring(0, 6)}...${address.substring(address.length - 4)}`
+        : ''}
+    </EuiText>
+  );
+
   const visibleItems = isAuthenticated
     ? allNavItems.filter(item => {
         const userIsAdmin = roles.includes('admin');
-
         if (userIsAdmin) {
           return item.isAdmin === true;
         }
-
         if (item.isIssuer && !roles.includes('issuer')) {
           return false;
         }
-
         // Hide admin-only items for non-admin users
-        if (item.isAdmin) {
-          return false;
-        }
-
-        return true;
+        return !item.isAdmin;
       })
     : [];
+
+  // Add logout item for authenticated users
+  const navItemsWithLogout = isAuthenticated ? [...visibleItems, logoutNavItem] : [];
 
   const sideNavItems = [
     {
       name: 'Blockchain Platform',
       id: 0,
       items: isAuthenticated
-        ? (roles.includes('admin') ? visibleItems : [...publicNavItems, ...visibleItems])
+        ? navItemsWithLogout // Only show issuer/student or admin options + logout when authenticated
         : [...publicNavItems, adminLoginNavItem, userLoginNavItem],
     }
   ];
@@ -139,25 +161,9 @@ const Sidebar = () => {
         </EuiFlexItem>
       </EuiFlexGroup>
       <EuiSpacer size="l" />
+      {isAuthenticated && userLabel}
       <EuiSideNav items={sideNavItems} />
 
-      {/* Always show logout for any authenticated user */}
-      {isAuthenticated && (
-        <div style={{ position: 'absolute', bottom: '20px', width: 'calc(100% - 32px)' }}>
-          <EuiFlexGroup direction="column" alignItems="center" gutterSize="s">
-            <EuiFlexItem>
-              <EuiText size="xs">
-                {roles.includes('admin') ? 'Admin' : (address ? `${address.substring(0, 6)}...${address.substring(address.length - 4)}` : '')}
-              </EuiText>
-            </EuiFlexItem>
-            <EuiFlexItem>
-              <EuiButton size="s" onClick={logout} fullWidth>
-                Logout
-              </EuiButton>
-            </EuiFlexItem>
-          </EuiFlexGroup>
-        </div>
-      )}
 
       <Login isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} loginType={loginType} />
     </div>

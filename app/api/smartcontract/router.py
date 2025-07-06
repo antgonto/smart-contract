@@ -296,6 +296,8 @@ def list_certificates(request):
     try:
         manager.refresh()
         contract = manager.get_contract()
+        if contract is None:
+            raise HttpError(500, f"Contract not loaded: {manager.get_error()}")
         events = contract.events.CertificateRegistered().get_logs(fromBlock=0)
         for event in events:
             cert_hash = event.args.certHash.hex()
@@ -328,6 +330,9 @@ def list_certificates(request):
             })
         return CertificateListResponse(certificates=certificates)
     except Exception as e:
+        import traceback
+        print('Exception in list_certificates:', e)
+        traceback.print_exc()
         raise HttpError(500, f"Failed to list certificates: {str(e)}") from e
 
 
@@ -514,4 +519,3 @@ def dashboard_wallet_gas_balance(request, data: DashboardWalletBalanceRequest):
     # Use the wallet balance endpoint logic
     balance_response = get_balance(request, data)
     return DashboardMetrics(wallet_gas_balance=balance_response.balance)
-
