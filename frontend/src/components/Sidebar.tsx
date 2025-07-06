@@ -78,10 +78,10 @@ const Sidebar = () => {
   ];
 
   const adminLoginNavItem = {
-    id: 'admin-login',
+    id: 'admin-dashboard',
     name: 'Admin Login',
     onClick: () => {
-      navigate('/admin-login');
+      navigate('/admin-dashboard');
       // After successful login, redirect to root
       // This requires handling in the login logic/modal, not just here
     },
@@ -143,10 +143,21 @@ const Sidebar = () => {
       name: 'Blockchain Platform',
       id: 0,
       items: isAuthenticated
-        ? navItemsWithLogout // Only show issuer/student or admin options + logout when authenticated
+        ? navItemsWithLogout
         : [...publicNavItems, adminLoginNavItem, userLoginNavItem],
     }
   ];
+
+  React.useEffect(() => {
+    if (isAuthenticated && roles && roles.length > 0) {
+      const roleLabel = roles.includes('admin')
+        ? 'Admin'
+        : roles.includes('issuer')
+        ? 'Issuer'
+        : 'Student';
+      alert(`Logged in as: ${roleLabel}`);
+    }
+  }, [isAuthenticated, roles]);
 
   return (
     <div style={{ width: '200px', height: '100%', background: '#1a1c21', padding: '16px' }}>

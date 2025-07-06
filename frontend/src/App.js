@@ -18,7 +18,6 @@ import CertificatesList from "./pages/CertificatesList";
 import Wallet from './pages/Wallet';
 import { IssuerDashboard } from './pages/IssuerDashboard';
 import VerificationPortal from './components/VerificationPortal';
-import AdminLogin from './components/AdminLogin';
 import AdminDashboard from "./pages/AdminDashboard";
 import Dashboard from "./pages/Dashboard";
 
@@ -44,7 +43,6 @@ function App() {
                   <Route path="/issuer-dashboard" element={<IssuerDashboard />} />
                   <Route path="/verify-certificate" element={<VerificationPortal />} />
                   <Route path="/admin-dashboard" element={<AdminDashboard />} />
-                  <Route path="/admin-login" element={<AdminLogin />} />
                   {/* Additional routes can be added here */}
                 </Routes>
               </EuiFlexItem>
