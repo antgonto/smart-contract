@@ -20,6 +20,7 @@ import { IssuerDashboard } from './pages/IssuerDashboard';
 import VerificationPortal from './components/VerificationPortal';
 import AdminLogin from './components/AdminLogin';
 import AdminDashboard from "./pages/AdminDashboard";
+import Dashboard from "./pages/Dashboard";
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
               <EuiFlexItem>
                 <Routes>
                   <Route path="/" element={<></>} />
+                  <Route path="/metrics" element={<Dashboard />} />
                   <Route path="/wallet" element={<Wallet />} />
                   <Route path="/register-certificate" element={<RegisterCertificate />} />
                   <Route path="/settings" element={<SettingsMenu />} />

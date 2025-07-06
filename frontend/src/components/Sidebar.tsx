@@ -23,8 +23,8 @@ const Sidebar = () => {
     {
       id: '1',
       name: 'Telemetry Dashboard',
-      onClick: () => navigate('/'),
-      isSelected: location.pathname === '/',
+      onClick: () => navigate('/metrics'),
+      isSelected: location.pathname === '/metrics',
       icon: <EuiIcon type="dashboardApp" />,
       isAdmin: true, // This marks the item as admin-only
     },
