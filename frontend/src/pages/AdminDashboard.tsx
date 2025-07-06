@@ -18,9 +18,11 @@ const AdminDashboard: React.FC = () => {
   const [walletName, setWalletName] = useState('');
   const [walletRole, setWalletRole] = useState<'Issuer' | 'Student'>('Student');
   const [wallets, setWallets] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [walletLoading, setWalletLoading] = useState(false);
   const [walletError, setWalletError] = useState('');
   const [walletSuccess, setWalletSuccess] = useState('');
+  const [showAccountsTable, setShowAccountsTable] = useState(false);
 
   const isAdmin = isAuthenticated && roles && roles.includes('admin');
 
@@ -61,8 +63,23 @@ const AdminDashboard: React.FC = () => {
     setWalletLoading(false);
   };
 
+  const fetchAccounts = async () => {
+    setWalletLoading(true);
+    setWalletError('');
+    try {
+      const res = await axios.get('/app/v1/smartcontracts/account/list');
+      setAccounts(res.data);
+    } catch (err: any) {
+      setWalletError('Failed to fetch accounts.');
+    }
+    setWalletLoading(false);
+  };
+
   React.useEffect(() => {
-    if (isAdmin) fetchWallets();
+    if (isAdmin) {
+      fetchWallets();
+      fetchAccounts();
+    }
   }, [isAdmin]);
 
   const handleCreateWallet = async (e: React.FormEvent) => {
@@ -83,6 +100,32 @@ const AdminDashboard: React.FC = () => {
     }
     setWalletLoading(false);
   };
+
+  const accountColumns = [
+    { field: 'name', name: 'Name' },
+    { field: 'address', name: 'Address' },
+    { field: 'balance', name: 'Balance (ETH)' },
+    { field: 'created_at', name: 'Created At' },
+    {
+      field: 'transactions',
+      name: 'Transactions',
+      render: (transactions: any[]) => (
+        <EuiBasicTable
+          items={transactions}
+          columns={[
+            { field: 'hash', name: 'Tx Hash' },
+            { field: 'from', name: 'From' },
+            { field: 'to', name: 'To' },
+            { field: 'value', name: 'Value (ETH)' },
+            { field: 'timestamp', name: 'Timestamp' },
+          ]}
+          noItemsMessage="No transactions found."
+          pagination={false}
+          sorting={false}
+        />
+      ),
+    },
+  ];
 
   if (!isAdmin) {
     return (
@@ -146,17 +189,22 @@ const AdminDashboard: React.FC = () => {
             </EuiCard>
             <EuiSpacer size="l" />
             <EuiCard title="All Wallets & Accounts">
-              <EuiBasicTable
-                items={wallets}
-                columns={[
-                  { field: 'name', name: 'Name' },
-                  { field: 'created_at', name: 'Created At' },
-                  { field: 'balance', name: 'Balance (ETH)' },
-                ]}
-                loading={walletLoading}
-                noItemsMessage="No wallets/accounts found."
-              />
-              {walletError && <EuiCallOut color="danger" title="Error">{walletError}</EuiCallOut>}
+              <EuiButton
+                style={{ marginBottom: 16 }}
+                onClick={() => setShowAccountsTable((prev) => !prev)}
+                fill
+                size="s"
+              >
+                {showAccountsTable ? 'Hide' : 'Show'} All Accounts
+              </EuiButton>
+              {showAccountsTable && (
+                <EuiBasicTable
+                  items={accounts}
+                  columns={accountColumns}
+                  loading={walletLoading}
+                  noItemsMessage="No accounts found."
+                />
+              )}
             </EuiCard>
           </>
         </EuiPageSection>

@@ -26,6 +26,14 @@ const Sidebar = () => {
   const allNavItems = [
     {
       id: '1',
+      name: 'Settings',
+      onClick: () => navigate('/settings'),
+      isSelected: location.pathname === '/settings',
+      icon: <EuiIcon type="gear" />,
+      isAdmin: true, // This marks the item as admin-only
+    },
+    {
+      id: '2',
       name: 'Telemetry Dashboard',
       onClick: () => navigate('/metrics'),
       isSelected: location.pathname === '/metrics',
@@ -41,7 +49,7 @@ const Sidebar = () => {
       isIssuer: true,
     },
     {
-      id: '2',
+      id: '3',
       name: 'Register Certificate',
       onClick: () => navigate('/register-certificate'),
       isSelected: location.pathname === '/register-certificate',
@@ -49,26 +57,26 @@ const Sidebar = () => {
       isIssuer: true,
     },
     {
-      id: '3',
+      id: '4',
       name: 'My Certificates',
       onClick: () => navigate('/certificates'),
       isSelected: location.pathname === '/certificates',
       icon: <EuiIcon type="indexOpen" />,
     },
     {
-      id: '4',
+      id: '5',
       name: 'Transactions',
       onClick: () => navigate('/wallet'),
       isSelected: location.pathname === '/wallet',
       icon: <EuiIcon type="currency" />,
     },
     {
-      id: '5',
-      name: 'Settings',
-      onClick: () => navigate('/settings'),
-      isSelected: location.pathname === '/settings',
-      icon: <EuiIcon type="gear" />,
-      isAdmin: true, // This marks the item as admin-only
+      id: 'all-accounts',
+      name: 'All Wallets & Accounts',
+      onClick: () => navigate('/all-accounts'),
+      isSelected: location.pathname === '/all-accounts',
+      icon: <EuiIcon type="tableDensityNormal" />,
+      isAdmin: true, // Only show for admin
     },
   ];
 
@@ -79,6 +87,7 @@ const Sidebar = () => {
       onClick: () => navigate('/verify-certificate'),
       isSelected: location.pathname === '/verify-certificate',
       icon: <EuiIcon type="checkInCircleFilled" />,
+      isAdmin: true, // Only show for admin
     },
   ];
 

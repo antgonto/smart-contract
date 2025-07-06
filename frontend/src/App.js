@@ -20,6 +20,7 @@ import { IssuerDashboard } from './pages/IssuerDashboard';
 import VerificationPortal from './components/VerificationPortal';
 import AdminDashboard from "./pages/AdminDashboard";
 import Dashboard from "./pages/Dashboard";
+import AllAccountsView from './pages/AllAccountsView';
 
 function App() {
   return (
@@ -39,6 +40,7 @@ function App() {
                   <Route path="/wallet" element={<Wallet />} />
                   <Route path="/register-certificate" element={<RegisterCertificate />} />
                   <Route path="/settings" element={<SettingsMenu />} />
+                  <Route path="/all-accounts" element={<AllAccountsView />} />
                   <Route path="/certificates" element={<CertificatesList />} />
                   <Route path="/issuer-dashboard" element={<IssuerDashboard />} />
                   <Route path="/verify-certificate" element={<VerificationPortal />} />

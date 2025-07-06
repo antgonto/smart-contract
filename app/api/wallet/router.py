@@ -341,3 +341,28 @@ def get_account_roles(request, address: str):
         return roles
     except Account.DoesNotExist:
         return []
+
+from django.forms.models import model_to_dict
+
+@router.get("/all-accounts", response=list[dict])
+def list_all_accounts(request):
+    w3 = Web3(Web3.HTTPProvider(GANACHE_URL))
+    accounts = Account.objects.all()
+    result = []
+    for acc in accounts:
+        # Get balance
+        try:
+            balance = w3.eth.get_balance(acc.address)
+        except Exception:
+            balance = None
+        # Get transactions
+        txs = list(Transaction.objects.filter(account=acc).values(
+            'tx_hash', 'to_address', 'amount', 'status', 'timestamp'))
+        result.append({
+            'name': acc.name,
+            'address': acc.address,
+            'balance': str(balance) if balance is not None else '-',
+            'created_at': acc.created_at.isoformat() if acc.created_at else '',
+            'transactions': txs,
+        })
+    return result
