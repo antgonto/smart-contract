@@ -9,6 +9,7 @@ from web3.middleware import geth_poa_middleware
 import json
 from app.models import Account, Transaction, Wallet, CustomUser
 from django.db import transaction as db_transaction
+from app.models import AccountRole
 
 GANACHE_URL = os.getenv('GANACHE_URL', 'http://ganache:8545')
 GANACHE_PRIVATE_KEY = os.getenv('GANACHE_PRIVATE_KEY')  # Optional: can use the first Ganache account
@@ -181,6 +182,8 @@ def create_wallet(request, data: WalletCreateRequest):
         mnemonic=mnemonic,
         user=user
     )
+    # Create AccountRole association
+    AccountRole.objects.create(account=account, role=data.role)
     # store credentials in a file named after the wallet
     filename = f"{data.name}.txt"
     with open(filename, 'w') as f:
@@ -199,32 +202,30 @@ def create_wallet(request, data: WalletCreateRequest):
     }
     funder_account = w3.eth.account.from_key(funder_private_key)
     signed_tx = funder_account.sign_transaction(tx)
-    # Use the correct attribute for the raw transaction
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    # Optionally, wait for receipt
-    w3.eth.wait_for_transaction_receipt(tx_hash)
-    # After funding the new wallet, if role is issuer, grant on-chain role
-    roles = []
-    if data.role == 'issuer':
-        w3 = Web3(Web3.HTTPProvider(GANACHE_URL))
-        abi, contract_address = get_certificate_registry_contract()
-        contract = w3.eth.contract(address=Web3.to_checksum_address(contract_address), abi=abi)
-        admin_private_key = os.environ.get('GANACHE_FUNDER_PRIVATE_KEY') or GANACHE_PRIVATE_KEY
-        admin_account = w3.eth.account.from_key(admin_private_key)
-        nonce = w3.eth.get_transaction_count(admin_account.address)
+    w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+
+    # Assign contract role if needed
+    abi, contract_address = get_certificate_registry_contract()
+    contract = w3.eth.contract(address=contract_address, abi=abi)
+    if data.role == "Issuer":
+        # Grant ISSUER_ROLE to the new address
+        admin_account = w3.eth.account.from_key(funder_private_key)
         tx = contract.functions.grantIssuerRole(address).build_transaction({
-            'from': admin_account.address,
-            'nonce': nonce,
+            'from': funder_address,
+            'nonce': w3.eth.get_transaction_count(funder_address),
             'gas': 200000,
             'gasPrice': w3.to_wei('1', 'gwei'),
         })
-        signed_tx = admin_account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-        w3.eth.wait_for_transaction_receipt(tx_hash)
-        roles.append('issuer')
-    else:
-        roles.append('student')
-    return WalletCreateResponse(id=wallet.id, name=wallet.name, created_at=wallet.created_at.isoformat(), roles=roles)
+        signed = admin_account.sign_transaction(tx)
+        w3.eth.send_raw_transaction(signed.raw_transaction)
+    # Get roles from contract
+    roles = contract.functions.getRoles(address).call()
+    return WalletCreateResponse(
+        id=wallet.id,
+        name=wallet.name,
+        created_at=str(wallet.created_at),
+        roles=roles
+    )
 
 @router.get("/list", response=list[WalletListItem])
 def list_wallets(request):
@@ -328,3 +329,15 @@ def get_account_balance(request, address: str, rpc_url: str = None):
         return str(balance)
     except Exception as e:
         return f"Error: {str(e)}"
+
+@router.get("/account/roles", response=list[str])
+def get_account_roles(request, address: str):
+    """
+    Returns a list of roles for the given account address.
+    """
+    try:
+        account = Account.objects.get(address=address)
+        roles = list(AccountRole.objects.filter(account=account).values_list('role', flat=True))
+        return roles
+    except Account.DoesNotExist:
+        return []

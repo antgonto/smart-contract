@@ -43,7 +43,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const login = (newToken: string, newRoles: string[]) => {
         localStorage.setItem('token', newToken);
-        localStorage.setItem('roles', JSON.stringify(newRoles));
+        localStorage.setItem('roles', JSON.stringify(newRoles[0]));
         setToken(newToken);
         setRoles(newRoles);
         setIsAdmin(false); // Ensure admin state is cleared

@@ -10,7 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from web3 import Web3
 
 from app.api.smartcontract.contract_manager import ContractManager
-from app.models import CustomUser, Account as UserAccount
+from app.models import CustomUser, Account as UserAccount, AccountRole
 
 manager = ContractManager()
 manager.refresh()
@@ -95,24 +95,11 @@ def login(request, login_data: LoginRequest):
         account.user = user
         account.save()
 
-    # Check for roles using the smart contract
-    roles = []
-    try:
-        contract = manager.get_contract()
-        if contract is None:
-            from app.api.smartcontract.router import deploy_contract
-            deploy_contract(request)
-            manager.refresh()
-            contract = manager.get_contract()
-        # Call getRoles(address) from the contract
-        contract_roles = contract.functions.getRoles(address).call()
-        if contract_roles:
-            roles = [r for r in contract_roles if r]
-    except Exception as e:
-        print(f"Could not check roles for {address}: {e}")
+    # Fetch roles from AccountRole table
+    roles = list(AccountRole.objects.filter(account=account).values_list('role', flat=True))
+    print("Roles: ", roles)
     # Fallback: if no roles, assign 'student' by default
     if not roles:
         roles.append("student")
-
     tokens = get_tokens_for_user(user, roles)
     return TokenResponse(access=tokens["access"], refresh=tokens["refresh"], roles=roles)

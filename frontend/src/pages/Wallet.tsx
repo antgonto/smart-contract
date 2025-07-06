@@ -184,11 +184,15 @@ const Wallet: React.FC = () => {
     }
   };
 
+  const [selectedRole, setSelectedRole] = useState<'Issuer' | 'Student'>('Student');
+  const [createdWalletRoles, setCreatedWalletRoles] = useState<string[]>([]);
+
   const handleCreate = async () => {
     setError(''); setSuccess('');
     if (!walletName) { setError('Please enter a wallet name.'); return; }
     try {
-      const res = await createWallet(walletName);
+      const res = await createWallet(walletName, selectedRole);
+      setCreatedWalletRoles(res.roles || []);
       const newAccount = { name: walletName, address: res.address, private_key: res.private_key, mnemonic: res.mnemonic, created_at: new Date().toISOString() };
       // Immediately update backendAccounts state so the new account appears without refresh
       setBackendAccounts(prev => [newAccount, ...prev]);
@@ -413,6 +417,23 @@ const Wallet: React.FC = () => {
                 </EuiButton>
               </>
             </EuiFormRow>
+
+            <EuiFormRow label="Role" helpText="Select the role for this wallet.">
+              <EuiRadioGroup
+                options={[
+                  { id: 'Issuer', label: 'Issuer' },
+                  { id: 'Student', label: 'Student' },
+                ]}
+                idSelected={selectedRole}
+                onChange={id => setSelectedRole(id as 'Issuer' | 'Student')}
+                name="role"
+              />
+            </EuiFormRow>
+            {createdWalletRoles.length > 0 && (
+              <EuiCallOut title="Assigned Roles" color="success">
+                <EuiText size="s">Roles: {createdWalletRoles.join(', ')}</EuiText>
+              </EuiCallOut>
+            )}
 
             <EuiSpacer size="m" />
 

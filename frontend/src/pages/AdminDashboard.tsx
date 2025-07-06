@@ -16,7 +16,7 @@ const AdminDashboard: React.FC = () => {
   const [address, setAddress] = useState('');
   const [adminSecret, setAdminSecret] = useState('');
   const [walletName, setWalletName] = useState('');
-  const [walletRole, setWalletRole] = useState<'issuer' | 'student'>('student');
+  const [walletRole, setWalletRole] = useState<'Issuer' | 'Student'>('Student');
   const [wallets, setWallets] = useState<any[]>([]);
   const [walletLoading, setWalletLoading] = useState(false);
   const [walletError, setWalletError] = useState('');
@@ -73,7 +73,7 @@ const AdminDashboard: React.FC = () => {
     try {
       const res = await axios.post('/app/v1/smartcontracts/wallet/create', {
         name: walletName,
-        role: walletRole,
+        role: walletRole, // Now sends 'Issuer' or 'Student'
       });
       setWalletSuccess(`Wallet created: ${res.data.name}`);
       setWalletName('');
@@ -131,11 +131,11 @@ const AdminDashboard: React.FC = () => {
                 <EuiFormRow label="Role">
                   <EuiSelect
                     options={[
-                      { value: 'student', text: 'Student' },
-                      { value: 'issuer', text: 'Issuer' },
+                      { value: 'Student', text: 'Student' },
+                      { value: 'Issuer', text: 'Issuer' },
                     ]}
                     value={walletRole}
-                    onChange={e => setWalletRole(e.target.value as 'issuer' | 'student')}
+                    onChange={e => setWalletRole(e.target.value as 'Issuer' | 'Student')}
                     disabled={walletLoading}
                   />
                 </EuiFormRow>

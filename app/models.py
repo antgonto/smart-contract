@@ -27,3 +27,12 @@ class Transaction(models.Model):
     amount = models.DecimalField(max_digits=30, decimal_places=10)
     timestamp = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, default='pending')
+
+class AccountRole(models.Model):
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='roles')
+    role = models.CharField(max_length=100)
+    # Optionally, add certificate = models.ForeignKey(Certificate, ...) if you want to link to certificates
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.account.address} - {self.role}"

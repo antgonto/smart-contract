@@ -9,11 +9,11 @@ contract CertificateRegistry is AccessControl {
     struct Certificate {
         bytes32 certHash;
         address issuer;
-        address student; // Changed from recipient
+        address student;
         uint256 issuedAt;
-        string ipfsCid; // Changed from metadata
+        string ipfsCid;
         bool isRevoked;
-        string role; // New: role of the user who registered (e.g., "issuer")
+        string role;
     }
 
     mapping(bytes32 => Certificate) public certificates;
@@ -37,7 +37,7 @@ contract CertificateRegistry is AccessControl {
             issuedAt: block.timestamp,
             ipfsCid: ipfsCid,
             isRevoked: false,
-            role: "issuer" // Only issuers can register
+            role: "Issuer" // Capitalized
         });
 
         certificates[certHash] = cert;
@@ -75,12 +75,11 @@ contract CertificateRegistry is AccessControl {
         string[] memory rolesTmp = new string[](2);
         uint count = 0;
         if (hasRole(ISSUER_ROLE, account)) {
-            rolesTmp[count] = "issuer";
+            rolesTmp[count] = "Issuer";
             count++;
         }
-        // If the account has at least one certificate as student, consider it a student
         if (certificatesByStudent[account].length > 0) {
-            rolesTmp[count] = "student";
+            rolesTmp[count] = "Student";
             count++;
         }
         string[] memory roles = new string[](count);

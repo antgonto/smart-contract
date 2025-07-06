@@ -2,8 +2,8 @@ import axios from 'axios';
 
 const API_BASE = '/app/v1/smartcontracts/wallet'; // Use relative path for proxy compatibility
 
-export async function createWallet(walletName: string) {
-  const res = await axios.post(`${API_BASE}/create`, { name: walletName });
+export async function createWallet(walletName: string, role: string) {
+  const res = await axios.post(`${API_BASE}/create`, { name: walletName, role });
   return res.data;
 }
 

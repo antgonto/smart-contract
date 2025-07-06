@@ -65,8 +65,9 @@ export const Login: React.FC<LoginProps> = ({ isOpen, onClose, loginType }) => {
                 address,
                 signature, // Send the signature, not the private key
             });
-            const { access } = loginResponse.data;
-            login(access);
+            const { access, refresh, roles } = loginResponse.data;
+            console.log(access, refresh, roles);
+            login(access, roles);
             onClose(); // Close modal on successful login
         } catch (err: any) {
             console.error('Login failed', err);

@@ -38,9 +38,11 @@ class CertificateIn(BaseModel):
 class CertificateOut(BaseModel):
     cert_hash: str
     issuer: str
-    recipient: str
-    ipfs_hash: str
-    created: str
+    student: str
+    issued_at: int
+    ipfs_cid: str
+    is_revoked: bool
+    role: str
     gas_used: int | None = None
 
 
@@ -126,8 +128,6 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
     # 3. Extract metadata
     reader = PdfReader(file)
     metadata = reader.metadata
-    print(metadata)
-
     meta_dict = {
         "title": metadata.title,
         "author": metadata.author,
@@ -135,7 +135,6 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
         "producer": metadata.producer,
         "created": str(metadata.creation_date),
     }
-    print("meta_dict: ", meta_dict)
     # 4. Upload to IPFS (offchain) and get IPFS hash
     with ipfshttpclient.connect(IPFS_API_URL) as client:
         res = client.add_bytes(pdf_bytes)
@@ -149,25 +148,28 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
         tx_hash = contract.functions.registerCertificate(
             cert_hash_bytes,
             Web3.to_checksum_address(recipient),
-            ipfs_hash,  # Store IPFS hash as metadata
-            str(meta_dict),  # Optionally store metadata as content
+            ipfs_hash
         ).transact({"from": issuer})
-        # Get transaction receipt to fetch gas used
         receipt = manager.web3.eth.get_transaction_receipt(tx_hash)
         gas_used = receipt['gasUsed']
+        # Fetch all certificate details from the contract
+        cert_details = contract.functions.getCertificateWithRole(cert_hash_bytes).call()
+        # cert_details: (issuer, student, issuedAt, isRevoked, role)
+        return CertificateOut(
+            cert_hash=cert_hash,
+            issuer=cert_details[0],
+            student=cert_details[1],
+            issued_at=cert_details[2],
+            ipfs_cid=ipfs_hash,
+            is_revoked=cert_details[3],
+            role=cert_details[4],
+            gas_used=gas_used
+        )
     except Exception as e:
         from web3.exceptions import ContractLogicError
         if isinstance(e, ContractLogicError) and "Certificate already exists" in str(e):
             raise HttpError(409, "Certificate already exists for this hash.")
         raise
-    return CertificateOut(
-        cert_hash=cert_hash,
-        issuer=issuer,
-        recipient=recipient,
-        ipfs_hash=ipfs_hash,  # Return IPFS hash as metadata
-        created=str(metadata.creation_date),
-        gas_used=gas_used
-    )
 
 
 @router.post("/compile/", response=CompileResponse)

@@ -15,6 +15,10 @@ RUN npm install --legacy-peer-deps moment @elastic/eui-theme-borealis @elastic/e
 # Copy the rest of the application
 COPY . .
 
+COPY package.json ./
+COPY package-lock.json* ./
+RUN npm install
+
 EXPOSE 3000
 
 # Enable hot reloading (HMR) for development

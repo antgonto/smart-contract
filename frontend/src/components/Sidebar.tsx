@@ -6,6 +6,8 @@ import {
   EuiFlexGroup,
   EuiFlexItem,
   EuiText,
+  EuiGlobalToastList,
+  EuiGlobalToastListToast,
 } from '@elastic/eui';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,6 +21,7 @@ const Sidebar = () => {
   const roles = React.useMemo(() => contextRoles || [], [contextRoles]);
   const [isLoginModalOpen, setIsLoginModalOpen] = React.useState(false);
   const [loginType, setLoginType] = React.useState<'admin' | 'user'>('user');
+  const [toasts, setToasts] = React.useState<EuiGlobalToastListToast[]>([]);
 
   const allNavItems = [
     {
@@ -112,20 +115,10 @@ const Sidebar = () => {
     isSelected: false,
   };
 
-  // Show user/address label above nav
-  const userLabel = (
-    <EuiText size="xs" style={{ marginBottom: 12, textAlign: 'center' }}>
-      {roles.includes('admin')
-        ? 'Admin'
-        : address
-        ? `${address.substring(0, 6)}...${address.substring(address.length - 4)}`
-        : ''}
-    </EuiText>
-  );
 
   // Show role label at the very top of the sidebar
   const roleLabel = isAuthenticated && roles.length > 0
-    ? (roles.includes('admin') ? 'Admin' : roles.includes('issuer') ? 'Issuer' : 'Student')
+    ? (roles.includes('admin') ? 'Admin' : roles.includes('Issuer') ? 'Issuer' : 'Student')
     : '';
 
   const visibleItems = isAuthenticated
@@ -145,13 +138,18 @@ const Sidebar = () => {
   // Add logout item for authenticated users
   const navItemsWithLogout = isAuthenticated ? [...visibleItems, logoutNavItem] : [];
 
+  // Remove isAdmin and isIssuer before passing to EuiSideNav
+  function cleanNavItems(items: any[]) {
+    return items.map(({ isAdmin, isIssuer, ...rest }) => rest);
+  }
+
   const sideNavItems = [
     {
       name: 'Blockchain Platform',
       id: 0,
       items: isAuthenticated
-        ? navItemsWithLogout
-        : [...publicNavItems, adminLoginNavItem, userLoginNavItem],
+        ? cleanNavItems(navItemsWithLogout)
+        : cleanNavItems([...publicNavItems, adminLoginNavItem, userLoginNavItem]),
     }
   ];
 
@@ -159,37 +157,51 @@ const Sidebar = () => {
     if (isAuthenticated && roles && roles.length > 0) {
       const roleLabel = roles.includes('admin')
         ? 'Admin'
-        : roles.includes('issuer')
+        : roles.includes('Issuer')
         ? 'Issuer'
         : 'Student';
-      alert(`Logged in as: ${roleLabel}`);
+      setToasts([
+        {
+          id: 'user-role-toast',
+          title: `Logged in as: ${roleLabel}`,
+          color: 'success',
+          iconType: 'user',
+        },
+      ]);
     }
   }, [isAuthenticated, roles]);
 
   return (
-    <div style={{ width: '200px', height: '100%', background: '#1a1c21', padding: '16px' }}>
-      {/* Role label at the top */}
-      {isAuthenticated && roleLabel && (
-        <EuiText size="s" style={{ marginBottom: 16, textAlign: 'center', fontWeight: 'bold', color: '#FFD700' }}>
-          {roleLabel}
-        </EuiText>
-      )}
-      <EuiFlexGroup alignItems="center" gutterSize="s">
-        <EuiFlexItem grow={false}>
-          <EuiIcon type="securityApp" size="xl" />
-        </EuiFlexItem>
-        <EuiFlexItem>
-          <EuiText>
-            <h2 style={{ margin: 0 }}>Smart Contracts</h2>
+    <>
+      <EuiGlobalToastList
+        toasts={toasts}
+        dismissToast={() => setToasts([])}
+        toastLifeTimeMs={4000}
+      />
+      <div style={{ width: '200px', height: '100%', background: '#1a1c21', padding: '16px' }}>
+        {/* Role label at the top */}
+        {isAuthenticated && roleLabel && (
+          <EuiText size="s" style={{ marginBottom: 16, textAlign: 'center', fontWeight: 'bold', color: '#FFD700' }}>
+            {roleLabel}
           </EuiText>
-        </EuiFlexItem>
-      </EuiFlexGroup>
-      <EuiSpacer size="l" />
-      {isAuthenticated && userLabel}
-      <EuiSideNav items={sideNavItems} />
+        )}
+        <EuiFlexGroup alignItems="center" gutterSize="s">
+          <EuiFlexItem grow={false}>
+            <EuiIcon type="securityApp" size="xl" />
+          </EuiFlexItem>
+          <EuiFlexItem>
+            <EuiText>
+              <h2 style={{ margin: 0 }}>Smart Contracts</h2>
+            </EuiText>
+          </EuiFlexItem>
+        </EuiFlexGroup>
+        <EuiSpacer size="l" />
+        {isAuthenticated}
+        <EuiSideNav items={sideNavItems} />
 
-      <Login isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} loginType={loginType} />
-    </div>
+        <Login isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} loginType={loginType} />
+      </div>
+    </>
   );
 };
 
