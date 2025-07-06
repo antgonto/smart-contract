@@ -53,7 +53,7 @@ const AllAccountsView = () => {
   }, []);
 
   return (
-    <EuiCard title="All Wallets & Accounts">
+    <EuiCard title="Accounts">
       <EuiButton onClick={fetchAccounts} fill size="s" style={{ marginBottom: 16 }}>
         Refresh
       </EuiButton>

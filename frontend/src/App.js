@@ -21,6 +21,7 @@ import VerificationPortal from './components/VerificationPortal';
 import AdminDashboard from "./pages/AdminDashboard";
 import Dashboard from "./pages/Dashboard";
 import AllAccountsView from './pages/AllAccountsView';
+import CreateWalletView from './pages/CreateWalletView';
 
 function App() {
   return (
@@ -45,6 +46,7 @@ function App() {
                   <Route path="/issuer-dashboard" element={<IssuerDashboard />} />
                   <Route path="/verify-certificate" element={<VerificationPortal />} />
                   <Route path="/admin-dashboard" element={<AdminDashboard />} />
+                  <Route path="/create-wallet" element={<CreateWalletView />} />
                   {/* Additional routes can be added here */}
                 </Routes>
               </EuiFlexItem>

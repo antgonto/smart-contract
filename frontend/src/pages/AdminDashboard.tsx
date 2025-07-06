@@ -159,55 +159,7 @@ const AdminDashboard: React.FC = () => {
   return (
     <EuiPage style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <EuiPageBody component="div" style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <EuiPageSection style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <>
-            <EuiCard title="Create Wallet & Account">
-              <EuiForm component="form" onSubmit={handleCreateWallet}>
-                <EuiFormRow label="Wallet Name">
-                  <EuiFieldText
-                    placeholder="Enter wallet name"
-                    value={walletName}
-                    onChange={e => setWalletName(e.target.value)}
-                    disabled={walletLoading}
-                  />
-                </EuiFormRow>
-                <EuiFormRow label="Role">
-                  <EuiSelect
-                    options={[
-                      { value: 'Student', text: 'Student' },
-                      { value: 'Issuer', text: 'Issuer' },
-                    ]}
-                    value={walletRole}
-                    onChange={e => setWalletRole(e.target.value as 'Issuer' | 'Student')}
-                    disabled={walletLoading}
-                  />
-                </EuiFormRow>
-                <EuiButton type="submit" isLoading={walletLoading} fill>Create Wallet & Account</EuiButton>
-              </EuiForm>
-              {walletError && <EuiCallOut color="danger" title="Error">{walletError}</EuiCallOut>}
-              {walletSuccess && <EuiCallOut color="success" title="Success">{walletSuccess}</EuiCallOut>}
-            </EuiCard>
-            <EuiSpacer size="l" />
-            <EuiCard title="All Wallets & Accounts">
-              <EuiButton
-                style={{ marginBottom: 16 }}
-                onClick={() => setShowAccountsTable((prev) => !prev)}
-                fill
-                size="s"
-              >
-                {showAccountsTable ? 'Hide' : 'Show'} All Accounts
-              </EuiButton>
-              {showAccountsTable && (
-                <EuiBasicTable
-                  items={accounts}
-                  columns={accountColumns}
-                  loading={walletLoading}
-                  noItemsMessage="No accounts found."
-                />
-              )}
-            </EuiCard>
-          </>
-        </EuiPageSection>
+
       </EuiPageBody>
     </EuiPage>
   );

@@ -72,10 +72,18 @@ const Sidebar = () => {
     },
     {
       id: 'all-accounts',
-      name: 'All Wallets & Accounts',
+      name: 'Accounts',
       onClick: () => navigate('/all-accounts'),
       isSelected: location.pathname === '/all-accounts',
       icon: <EuiIcon type="tableDensityNormal" />,
+      isAdmin: true, // Only show for admin
+    },
+    {
+      id: 'create-wallet',
+      name: 'Create Wallet',
+      onClick: () => navigate('/create-wallet'),
+      isSelected: location.pathname === '/create-wallet',
+      icon: <EuiIcon type="plusInCircle" />,
       isAdmin: true, // Only show for admin
     },
   ];
