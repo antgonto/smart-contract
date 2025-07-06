@@ -46,7 +46,6 @@ const Sidebar = () => {
       onClick: () => navigate('/issuer-dashboard'),
       isSelected: location.pathname === '/issuer-dashboard',
       icon: <EuiIcon type="user" />,
-      isIssuer: true,
     },
     {
       id: '3',
@@ -54,7 +53,6 @@ const Sidebar = () => {
       onClick: () => navigate('/register-certificate'),
       isSelected: location.pathname === '/register-certificate',
       icon: <EuiIcon type="document" />,
-      isIssuer: true,
     },
     {
       id: '4',

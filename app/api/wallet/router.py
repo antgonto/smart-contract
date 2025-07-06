@@ -193,16 +193,26 @@ def create_wallet(request, data: WalletCreateRequest):
     funder_address, funder_private_key = get_ganache_funder(w3)
     if not funder_private_key:
         raise Exception('Funder private key not found. Set GANACHE_FUNDER_PRIVATE_KEY or provide a valid accounts.json.')
-    tx = {
-        'to': address,
-        'value': w3.to_wei(FUND_AMOUNT_ETHER, 'ether'),
-        'gas': 21000,
-        'gasPrice': w3.to_wei('1', 'gwei'),
-        'nonce': w3.eth.get_transaction_count(funder_address),
-    }
-    funder_account = w3.eth.account.from_key(funder_private_key)
-    signed_tx = funder_account.sign_transaction(tx)
-    w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+    try:
+        tx = {
+            'to': address,
+            'value': w3.to_wei(FUND_AMOUNT_ETHER, 'ether'),
+            'gas': 21000,
+            'gasPrice': w3.to_wei('1', 'gwei'),
+            'nonce': w3.eth.get_transaction_count(funder_address),
+        }
+        funder_account = w3.eth.account.from_key(funder_private_key)
+        signed_tx = funder_account.sign_transaction(tx)
+        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+        # Log the funding step for auditability
+        import logging
+        logging.info(f"Wallet funding: Sent {FUND_AMOUNT_ETHER} ETH from {funder_address} to {address}. Tx hash: {tx_hash.hex()}")
+    except Exception as e:
+        # Log the error and return a clear message
+        import logging
+        logging.error(f"Failed to fund wallet {address}: {e}")
+        from ninja.errors import HttpError
+        raise HttpError(500, f"Failed to fund wallet: {str(e)}")
 
     # Assign contract role if needed
     abi, contract_address = get_certificate_registry_contract()

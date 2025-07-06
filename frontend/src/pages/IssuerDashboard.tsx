@@ -86,7 +86,7 @@ export const IssuerDashboard: React.FC = () => {
     }
   };
 
-  if (!isAuthenticated || !roles.includes('issuer')) {
+  if (!isAuthenticated || !roles.includes('Issuer')) {
     return (
       <EuiPage>
         <EuiPageBody>

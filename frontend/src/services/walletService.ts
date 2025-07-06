@@ -4,7 +4,10 @@ const API_BASE = '/app/v1/smartcontracts/wallet'; // Use relative path for proxy
 
 export async function createWallet(walletName: string, role: string) {
   const res = await axios.post(`${API_BASE}/create`, { name: walletName, role });
-  return res.data;
+  const walletData = res.data;
+  // Optionally, you can call generateAccountsAndFund here if you want to fund more accounts or do extra funding logic
+  // For now, just return the wallet data (funding is handled in backend)
+  return walletData;
 }
 
 export async function importWallet(mnemonic: string) {
