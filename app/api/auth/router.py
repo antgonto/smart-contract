@@ -96,6 +96,9 @@ def login(request, login_data: LoginRequest):
 
     # Check for roles
     roles = []
+    if user.is_superuser:
+        roles.append("admin")
+
     try:
         contract = manager.get_contract()
         issuer_role =     contract.functions.ISSUER_ROLE().call()

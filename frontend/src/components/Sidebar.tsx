@@ -16,9 +16,8 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, address, logout, roles } = useAuth();
-  const [isConfirmModalVisible, setIsConfirmModalVisible] = React.useState(false);
-  const showConfirmModal = () => setIsConfirmModalVisible(true);
-  const closeConfirmModal = () => setIsConfirmModalVisible(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = React.useState(false);
+  const [loginType, setLoginType] = React.useState<'admin' | 'user'>('user');
 
   const allNavItems = [
     {
@@ -67,14 +66,6 @@ const Sidebar = () => {
       icon: <EuiIcon type="gear" />,
       isAdmin: true, // This marks the item as admin-only
     },
-    {
-      id: 'admin-dashboard',
-      name: 'Admin Dashboard',
-      onClick: () => navigate('/admin-dashboard'),
-      isSelected: location.pathname === '/admin-dashboard',
-      icon: <EuiIcon type="lock" />,
-      isAdmin: true, // This marks the item as admin-only
-    },
   ];
 
   const publicNavItems = [
@@ -87,10 +78,40 @@ const Sidebar = () => {
     },
   ];
 
+  const adminLoginNavItem = {
+    id: 'admin-login',
+    name: 'Admin Login',
+    onClick: () => navigate('/admin-login'),
+    icon: <EuiIcon type="user" />,
+  };
+
+  const userLoginNavItem = {
+    id: 'user-login',
+    name: 'Issuer/Student Login',
+    onClick: () => {
+      setLoginType('user');
+      setIsLoginModalOpen(true);
+    },
+    icon: <EuiIcon type="user" />,
+  };
+
   const visibleItems = isAuthenticated
     ? allNavItems.filter(item => {
-        if (item.isIssuer && !roles.includes('issuer')) return false;
-        if (item.isAdmin && !roles.includes('admin')) return false; // Check for admin role
+        const userIsAdmin = roles.includes('admin');
+
+        if (userIsAdmin) {
+          return item.isAdmin === true;
+        }
+
+        if (item.isIssuer && !roles.includes('issuer')) {
+          return false;
+        }
+
+        // Hide admin-only items for non-admin users
+        if (item.isAdmin) {
+          return false;
+        }
+
         return true;
       })
     : [];
@@ -99,10 +120,9 @@ const Sidebar = () => {
     {
       name: 'Blockchain Platform',
       id: 0,
-      items: [
-        ...publicNavItems,
-        ...visibleItems,
-      ],
+      items: isAuthenticated
+        ? (roles.includes('admin') ? visibleItems : [...publicNavItems, ...visibleItems])
+        : [...publicNavItems, adminLoginNavItem, userLoginNavItem],
     }
   ];
 
@@ -121,12 +141,13 @@ const Sidebar = () => {
       <EuiSpacer size="l" />
       <EuiSideNav items={sideNavItems} />
 
-      <div style={{ position: 'absolute', bottom: '20px', width: 'calc(100% - 32px)' }}>
-        {isAuthenticated ? (
+      {/* Always show logout for any authenticated user */}
+      {isAuthenticated && (
+        <div style={{ position: 'absolute', bottom: '20px', width: 'calc(100% - 32px)' }}>
           <EuiFlexGroup direction="column" alignItems="center" gutterSize="s">
             <EuiFlexItem>
               <EuiText size="xs">
-                {address ? `${address.substring(0, 6)}...${address.substring(address.length - 4)}` : ''}
+                {roles.includes('admin') ? 'Admin' : (address ? `${address.substring(0, 6)}...${address.substring(address.length - 4)}` : '')}
               </EuiText>
             </EuiFlexItem>
             <EuiFlexItem>
@@ -135,48 +156,10 @@ const Sidebar = () => {
               </EuiButton>
             </EuiFlexItem>
           </EuiFlexGroup>
-        ) : (
-          <Login />
-        )}
-      </div>
-
-      {isConfirmModalVisible && (
-        <div className="confirm-modal" style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: '#fff',
-            padding: '20px',
-            borderRadius: '4px',
-            maxWidth: '400px'
-          }}>
-            <p>Are you sure you want to drop the cyber_db database? This action cannot be undone.</p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
-              <button
-                style={{ marginRight: '10px', padding: '5px 10px' }}
-                onClick={closeConfirmModal}
-              >
-                Cancel
-              </button>
-              <button
-                style={{ padding: '5px 10px' }}
-                onClick={showConfirmModal}
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
         </div>
       )}
+
+      <Login isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} loginType={loginType} />
     </div>
   );
 };
