@@ -16,7 +16,7 @@ api = NinjaAPI(
 
 # Only add routers if they haven't been added already
 routers = [
-    ("/auth", "app.api.auth.router.router", ["authentication"]),
+    ("/auth/", "app.api.auth.router.router", ["auth"]),
     ("/smartcontract/", "app.api.smartcontract.router.router", ["smartcontract"]),
     ("/wallet/", "app.api.wallet.router.router", ["wallet"]),
     ("/admin/", "app.api.admin.router.router", ["admin"]),

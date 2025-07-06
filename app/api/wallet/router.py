@@ -1,8 +1,13 @@
 from ninja import Router
 from eth_account import Account as EthAccount
 from web3 import Web3
-from django.conf import settings
 import os
+
+GANACHE_URL = os.getenv('GANACHE_URL', 'http://ganache:8545')
+GANACHE_PRIVATE_KEY = os.getenv('GANACHE_PRIVATE_KEY')  # Optional: can use the first Ganache account
+FUND_AMOUNT_ETHER = float(os.getenv('FUND_AMOUNT_ETHER', '1'))  # Default: 1 ETH
+
+from django.conf import settings
 from pydantic import BaseModel
 from mnemonic import Mnemonic
 from web3.middleware import geth_poa_middleware
@@ -60,6 +65,12 @@ def get_funder_private_key(network: str):
 # Helper to get the first Ganache account and private key
 GANACHE_ACCOUNTS_PATH = "/home/app/.ganache/accounts.json"
 def get_ganache_funder(w3):
+    # First, try to get private key from environment variable
+    env_priv_key = os.environ.get('GANACHE_FUNDER_PRIVATE_KEY')
+    if env_priv_key:
+        accounts = w3.eth.accounts
+        if accounts:
+            return accounts[0], env_priv_key
     try:
         # Try to get accounts from Ganache RPC
         accounts = w3.eth.accounts
@@ -81,6 +92,7 @@ def get_ganache_funder(w3):
 
 class WalletCreateRequest(BaseModel):
     name: str
+    role: str  # 'issuer' or 'student'
 
 class WalletCreateResponse(BaseModel):
     id: int
@@ -133,7 +145,7 @@ class AccountListItem(BaseModel):
     created_at: str
     balance: str | None = None
 
-@router.post("/wallet/create", response=WalletCreateResponse)
+@router.post("/create", response=WalletCreateResponse)
 def create_wallet(request, data: WalletCreateRequest):
     user = request.user if hasattr(request, 'user') and request.user.is_authenticated else None
     # generate mnemonic and derive account
@@ -144,17 +156,57 @@ def create_wallet(request, data: WalletCreateRequest):
     private_key = acct.key.hex()
     # create wallet record
     wallet = Wallet.objects.create(user=user, name=data.name)
+    # create account record and assign role
+    account = Account.objects.create(
+        wallet=wallet,
+        address=address,
+        role=data.role,
+        name=data.name,
+        private_key=private_key,
+        mnemonic=mnemonic,
+        user=user
+    )
     # store credentials in a file named after the wallet
     filename = f"{data.name}.txt"
     with open(filename, 'w') as f:
         f.write(f"address: {address}\nprivate_key: {private_key}\nmnemonic: {mnemonic}\n")
+    # Fund the new wallet from Ganache
+    w3 = Web3(Web3.HTTPProvider(GANACHE_URL))
+    funder_address, funder_private_key = get_ganache_funder(w3)
+    if not funder_private_key:
+        raise Exception('Funder private key not found. Set GANACHE_FUNDER_PRIVATE_KEY or provide a valid accounts.json.')
+    tx = {
+        'to': address,
+        'value': w3.to_wei(FUND_AMOUNT_ETHER, 'ether'),
+        'gas': 21000,
+        'gasPrice': w3.to_wei('1', 'gwei'),
+        'nonce': w3.eth.get_transaction_count(funder_address),
+    }
+    funder_account = w3.eth.account.from_key(funder_private_key)
+    signed_tx = funder_account.sign_transaction(tx)
+    # Use the correct attribute for the raw transaction
+    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+    # Optionally, wait for receipt
+    w3.eth.wait_for_transaction_receipt(tx_hash)
     return WalletCreateResponse(id=wallet.id, name=wallet.name, created_at=wallet.created_at.isoformat())
 
-@router.get("/wallet/list", response=list[WalletListItem])
+@router.get("/list", response=list[WalletListItem])
 def list_wallets(request):
     user = request.user if hasattr(request, 'user') and request.user.is_authenticated else None
     wallets = Wallet.objects.filter(user=user) if user else Wallet.objects.all()
-    return [WalletListItem(id=w.id, name=w.name, created_at=w.created_at.isoformat()) for w in wallets]
+    w3 = Web3(Web3.HTTPProvider(GANACHE_URL))
+    wallet_items = []
+    for w in wallets:
+        # Get the associated account
+        account = Account.objects.filter(wallet=w).first()
+        balance = None
+        if account:
+            try:
+                balance = w3.from_wei(w3.eth.get_balance(account.address), 'ether')
+            except Exception:
+                balance = None
+        wallet_items.append(WalletListItem(id=w.id, name=w.name, created_at=w.created_at.isoformat(), balance=str(balance) if balance is not None else None))
+    return wallet_items
 
 @router.post("/import", response=WalletImportResponse)
 def import_wallet(request, data: WalletImportRequest):

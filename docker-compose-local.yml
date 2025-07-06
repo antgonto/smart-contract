@@ -99,19 +99,20 @@ services:
   redis:
     container_name: redis
     image: redis:8.0-M04-bookworm
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    command: ["redis-server", "/data/redis.conf"]
     env_file:
       - ./.env
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_PASSWORD: "redis"
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD", "redis-cli", "-u", "redis://default:redis@localhost:6379/0", "ping"]
       interval: 5s
       timeout: 5s
       retries: 3
       start_period: 10s
     volumes:
       - redis_data:/data
+      - ./redis.conf:/data/redis.conf
     networks:
       - contract_network
     restart: unless-stopped
@@ -125,7 +126,7 @@ services:
     env_file:
       - ./.env
     environment:
-      REACT_APP_API_URL: http://django:8000
+      REACT_APP_API_URL: http://localhost:8000
       CHOKIDAR_USEPOLLING: "true"
     command: ["npm", "start"]
     ports:

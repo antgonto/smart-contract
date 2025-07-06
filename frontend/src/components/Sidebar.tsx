@@ -26,7 +26,8 @@ const Sidebar = () => {
       name: 'Telemetry Dashboard',
       onClick: () => navigate('/'),
       isSelected: location.pathname === '/',
-      icon: <EuiIcon type="dashboardApp" />
+      icon: <EuiIcon type="dashboardApp" />,
+      isAdmin: true, // This marks the item as admin-only
     },
     {
       id: 'issuer-dashboard',
@@ -64,18 +65,44 @@ const Sidebar = () => {
       onClick: () => navigate('/settings'),
       isSelected: location.pathname === '/settings',
       icon: <EuiIcon type="gear" />,
+      isAdmin: true, // This marks the item as admin-only
+    },
+    {
+      id: 'admin-dashboard',
+      name: 'Admin Dashboard',
+      onClick: () => navigate('/admin-dashboard'),
+      isSelected: location.pathname === '/admin-dashboard',
+      icon: <EuiIcon type="lock" />,
+      isAdmin: true, // This marks the item as admin-only
+    },
+  ];
+
+  const publicNavItems = [
+    {
+      id: 'verify-certificate',
+      name: 'Verify Certificate',
+      onClick: () => navigate('/verify-certificate'),
+      isSelected: location.pathname === '/verify-certificate',
+      icon: <EuiIcon type="checkInCircleFilled" />,
     },
   ];
 
   const visibleItems = isAuthenticated
-    ? allNavItems.filter(item => !item.isIssuer || roles.includes('issuer'))
+    ? allNavItems.filter(item => {
+        if (item.isIssuer && !roles.includes('issuer')) return false;
+        if (item.isAdmin && !roles.includes('admin')) return false; // Check for admin role
+        return true;
+      })
     : [];
 
   const sideNavItems = [
     {
       name: 'Blockchain Platform',
       id: 0,
-      items: visibleItems,
+      items: [
+        ...publicNavItems,
+        ...visibleItems,
+      ],
     }
   ];
 

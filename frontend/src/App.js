@@ -18,6 +18,9 @@ import RegisterCertificate from "./pages/RegisterCertificate";
 import CertificatesList from "./pages/CertificatesList";
 import Wallet from './pages/Wallet';
 import { IssuerDashboard } from './pages/IssuerDashboard';
+import VerifyCertificate from './pages/VerifyCertificate';
+import AdminDashboard from "./pages/AdminDashboard";
+import VerificationPortal from "./components/VerificationPortal";
 
 function App() {
   return (
@@ -32,12 +35,14 @@ function App() {
 
               <EuiFlexItem>
                 <Routes>
-                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/" element={<></>} />
                   <Route path="/wallet" element={<Wallet />} />
                   <Route path="/register-certificate" element={<RegisterCertificate />} />
                   <Route path="/settings" element={<SettingsMenu />} />
                   <Route path="/certificates" element={<CertificatesList />} />
                   <Route path="/issuer-dashboard" element={<IssuerDashboard />} />
+                  <Route path="/verify-certificate" element={<VerificationPortal />} />
+                  <Route path="/admin-dashboard" element={<AdminDashboard />} />
                   {/* Additional routes can be added here */}
                 </Routes>
               </EuiFlexItem>

@@ -3,7 +3,7 @@ import axios from 'axios';
 const API_BASE = '/app/v1/smartcontracts/wallet'; // Use relative path for proxy compatibility
 
 export async function createWallet(walletName: string) {
-  const res = await axios.post(`${API_BASE}/wallet/create`, { name: walletName });
+  const res = await axios.post(`${API_BASE}/create`, { name: walletName });
   return res.data;
 }
 
@@ -35,7 +35,7 @@ export async function generateAccountsAndFund(params: {
 
 export async function listWallets() {
   try {
-    const res = await axios.get(`${API_BASE}/wallet/list`);
+    const res = await axios.get(`${API_BASE}/list`);
     return Array.isArray(res.data) ? res.data : [];
   } catch (err: any) {
     if (err.response && err.response.status === 404) {

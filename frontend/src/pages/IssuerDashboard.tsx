@@ -4,7 +4,7 @@ import {
   EuiForm, EuiFormRow, EuiFieldText, EuiButton, EuiSpacer, EuiCallOut, EuiLoadingSpinner
 } from '@elastic/eui';
 import { useAuth } from '../contexts/AuthContext';
-import { api } from '../services/api';
+import api from '../services/api';
 import { ethers } from 'ethers';
 
 export const IssuerDashboard: React.FC = () => {
@@ -34,7 +34,7 @@ export const IssuerDashboard: React.FC = () => {
         return;
       }
 
-      const unsignedTxResponse = await api.post('/issuer/certificates', {
+      const unsignedTxResponse = await api.post('/app/v1/smartcontracts/issuer/certificates', {
         student_address: studentAddress,
         certificate_hash: certificateHash,
         ipfs_cid: ipfsCid,
@@ -68,7 +68,7 @@ export const IssuerDashboard: React.FC = () => {
         return;
       }
 
-      const unsignedTxResponse = await api.post('/issuer/certificates/revoke', {
+      const unsignedTxResponse = await api.post('/app/v1/smartcontracts/issuer/certificates/revoke', {
         certificate_hash: revokeHash,
       });
       const unsignedTx = unsignedTxResponse.data;

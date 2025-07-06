@@ -1,15 +1,21 @@
 import React, { useState, useCallback } from 'react';
 import {
-  EuiPage, EuiPageBody, EuiPageContent, EuiPageHeader, EuiTitle, EuiCard,
-  EuiForm, EuiFormRow, EuiFieldText, EuiButton, EuiSpacer, EuiCallOut, EuiBasicTable
+  EuiPage, EuiPageBody, EuiPageSection, EuiPageHeader, EuiTitle, EuiCard,
+  EuiForm, EuiFormRow, EuiFieldText, EuiButton, EuiSpacer, EuiCallOut, EuiBasicTable,
+  EuiBasicTableColumn
 } from '@elastic/eui';
-import axios from 'axios';
+import api from '../services/api';
 
-const API_BASE = '/app/v1/smartcontracts/student';
+type Certificate = {
+  hash: string;
+  issuer: string;
+  timestamp: string | number;
+  is_revoked: boolean;
+};
 
 const StudentDashboard: React.FC = () => {
   const [studentAddress, setStudentAddress] = useState('');
-  const [certificates, setCertificates] = useState([]);
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -22,7 +28,7 @@ const StudentDashboard: React.FC = () => {
     setError('');
     setCertificates([]);
     try {
-      const res = await axios.get(`${API_BASE}/certificates/${studentAddress}`);
+      const res = await api.get(`/app/v1/smartcontracts/student/certificates/${studentAddress}`);
       setCertificates(res.data);
       if (res.data.length === 0) {
         setError('No certificates found for this address.');
@@ -33,7 +39,7 @@ const StudentDashboard: React.FC = () => {
     setLoading(false);
   }, [studentAddress]);
 
-  const columns = [
+  const columns: EuiBasicTableColumn<Certificate>[] = [
     { field: 'hash', name: 'Hash', truncateText: true },
     { field: 'issuer', name: 'Issuer Address', truncateText: true },
     { field: 'timestamp', name: 'Timestamp' },
@@ -46,7 +52,7 @@ const StudentDashboard: React.FC = () => {
           description: 'Download certificate file',
           type: 'icon',
           icon: 'download',
-          onClick: (item: any) => alert(`Downloading file for hash: ${item.hash}`), // Placeholder
+          onClick: (item: Certificate) => alert(`Downloading file for hash: ${item.hash}`),
         },
       ],
     },
@@ -58,7 +64,7 @@ const StudentDashboard: React.FC = () => {
         <EuiPageHeader>
           <EuiTitle size="l"><h1>Student Dashboard</h1></EuiTitle>
         </EuiPageHeader>
-        <EuiPageContent>
+        <EuiPageSection>
           <EuiCard title="View Your Certificates">
             <EuiForm component="form">
               <EuiFormRow label="Your Wallet Address">
@@ -86,11 +92,10 @@ const StudentDashboard: React.FC = () => {
               />
             </EuiCard>
           )}
-        </EuiPageContent>
+        </EuiPageSection>
       </EuiPageBody>
     </EuiPage>
   );
 };
 
 export default StudentDashboard;
-

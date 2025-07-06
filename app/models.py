@@ -14,6 +14,7 @@ class Account(models.Model):
     wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, related_name='accounts', null=True, blank=True)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, null=True, blank=True)
     name = models.CharField(max_length=100)
+    role = models.CharField(max_length=100, default='Student')
     address = models.CharField(max_length=100, unique=True)
     private_key = models.CharField(max_length=256)
     mnemonic = models.CharField(max_length=256, blank=True, null=True)

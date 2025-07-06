@@ -120,27 +120,12 @@ WSGI_APPLICATION = "app.wsgi.application"
 
 
 # Use Redis if environment variables are set in environment.py, otherwise fallback to local memory cache
-redis_password = getattr(SETTINGS, 'REDIS_PASSWORD', '')
-redis_port = getattr(SETTINGS, 'REDIS_PORT', '6379')
-
-# Only use Redis if both are set and not empty/blank, and only if not running in a build/migration context
-USE_REDIS_CACHE = redis_password and redis_port and not os.environ.get('DISABLE_REDIS_CACHE', '')
-
-if USE_REDIS_CACHE:
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.redis.RedisCache",
-            "LOCATION": f"redis://{redis_password}@redis:{redis_port}/1",
-            "TIMEOUT": 300,
-        }
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": "redis://default:redis@redis:6379/0",
     }
-else:
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-            "LOCATION": "unique-snowflake",
-        }
-    }
+}
 
 DATABASES = {
     "default": {

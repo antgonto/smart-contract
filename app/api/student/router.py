@@ -1,7 +1,7 @@
 from ninja import Router
 from typing import List
 
-from app.api.auth import JWTAuth
+from app.api.authorization import JWTAuth
 from pydantic import BaseModel
 
 from app.api.smartcontract.contract_manager import ContractManager

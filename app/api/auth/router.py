@@ -16,13 +16,17 @@ manager = ContractManager()
 manager.refresh()
 
 
-router = Router(tags=["authentication"])
+router = Router(tags=["auth"])
 
 class LoginRequest(BaseModel):
     address: str
     signature: str
 
 class ChallengeResponse(BaseModel):
+    nonce: str
+
+class SignChallengeRequest(BaseModel):
+    private_key: str
     nonce: str
 
 class TokenResponse(BaseModel):
@@ -32,8 +36,10 @@ class TokenResponse(BaseModel):
 def get_tokens_for_user(user, roles=[]):
     refresh = RefreshToken.for_user(user)
     # Add custom claims
+    account = user.account_set.first()
     refresh['roles'] = roles
-    refresh['address'] = user.account.address
+    if account:
+        refresh['address'] = account.address
     return {
         'refresh': str(refresh),
         'access': str(refresh.access_token),
@@ -45,9 +51,19 @@ def get_challenge(request, address: str):
     cache.set(f"auth_nonce_{address.lower()}", nonce, timeout=300) # 5-minute expiry
     return {"nonce": nonce}
 
+@router.post("/sign_challenge")
+def sign_challenge_with_key(request, data: SignChallengeRequest):
+    try:
+        account = EthAccount.from_key(data.private_key)
+        signed_message = account.sign_message(encode_defunct(text=data.nonce))
+        return {"signature": signed_message.signature.hex()}
+    except Exception as e:
+        # In a real app, log the error and return a more generic message
+        return JSONResponse(status_code=400, content={"error": f"Failed to sign message: {e}"})
+
 @router.post("/login", response=TokenResponse)
-def login(request, data: LoginRequest):
-    address = Web3.to_checksum_address(data.address)
+def login(request, login_data: LoginRequest):
+    address = Web3.to_checksum_address(login_data.address)
     nonce = cache.get(f"auth_nonce_{address.lower()}")
 
     if not nonce:
@@ -56,7 +72,7 @@ def login(request, data: LoginRequest):
     message = encode_defunct(text=nonce)
 
     try:
-        recovered_address = EthAccount.recover_message(message, signature=data.signature)
+        recovered_address = EthAccount.recover_message(message, signature=login_data.signature)
         if recovered_address.lower() != address.lower():
             return 401, {"error": "Signature verification failed."}
     except Exception:
@@ -66,8 +82,17 @@ def login(request, data: LoginRequest):
     cache.delete(f"auth_nonce_{address.lower()}")
 
     user, created = CustomUser.objects.get_or_create(username=address.lower())
-    if created:
-        UserAccount.objects.create(user=user, address=address, name=f"Account for {address[:6]}")
+
+    # Ensure an account exists for the address and is linked to the user.
+    account, account_created = UserAccount.objects.get_or_create(
+        address=address,
+        defaults={'user': user, 'name': f"Account for {address[:6]}"}
+    )
+
+    if not account_created and not account.user:
+        # If the account existed but wasn't linked to a user, link it now.
+        account.user = user
+        account.save()
 
     # Check for roles
     roles = []
@@ -87,4 +112,3 @@ def login(request, data: LoginRequest):
 
     tokens = get_tokens_for_user(user, roles)
     return tokens
-

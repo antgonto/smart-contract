@@ -43,12 +43,11 @@ const RegisterCertificate = () => {
       }
 
       // 1. Get unsigned transaction from the backend
-      const unsignedTxResponse = await api.post('/issuer/certificates', {
+      const unsignedTxResponse = await api.post('/app/v1/smartcontracts/issuer/certificates', {
         student_address: studentAddress,
         certificate_hash: certificateHash,
         ipfs_cid: ipfsCid,
       });
-
       const unsignedTx = unsignedTxResponse.data;
 
       // 2. Get signer and send transaction

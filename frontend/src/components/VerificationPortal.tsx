@@ -1,6 +1,17 @@
 import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import ReCAPTCHA from "react-google-recaptcha";
+import {
+    EuiForm,
+    EuiFormRow,
+    EuiFieldText,
+    EuiButton,
+    EuiCallOut,
+    EuiSpacer,
+    EuiCard,
+    EuiPage,
+    EuiPageBody
+} from '@elastic/eui';
 
 const VerificationPortal = () => {
     const [certificateHash, setCertificateHash] = useState('');
@@ -42,39 +53,47 @@ const VerificationPortal = () => {
     };
 
     return (
-        <div>
-            <h2>Public Certificate Verification</h2>
-            <input
-                type="text"
-                value={certificateHash}
-                onChange={(e) => setCertificateHash(e.target.value)}
-                placeholder="Enter certificate hash"
-            />
-            <ReCAPTCHA
-                ref={recaptchaRef}
-                sitekey={process.env.REACT_APP_RECAPTCHA_SITE_KEY!}
-                onChange={onRecaptchaChange}
-            />
-            <button onClick={handleVerify}>Verify</button>
-
-            {error && <p style={{ color: 'red' }}>{error}</p>}
-
-            {verificationResult && (
-                <div>
-                    <h3>Verification Result</h3>
-                    <p>Is Valid: {verificationResult.is_valid ? 'Yes' : 'No'}</p>
-                    <p>Is Revoked: {verificationResult.is_revoked ? 'Yes' : 'No'}</p>
-                    {verificationResult.is_valid && (
-                        <>
-                            <p>Issuer: {verificationResult.issuer}</p>
-                            <p>Student: {verificationResult.student}</p>
-                            <p>Timestamp: {new Date(verificationResult.timestamp * 1000).toLocaleString()}</p>
-                        </>
+        <EuiPage style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <EuiPageBody component="div" style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <EuiCard title="Public Certificate Verification" style={{ minWidth: 400, maxWidth: 500, width: '100%' }}>
+                    <EuiSpacer size="m" />
+                    <EuiForm component="form" onSubmit={e => { e.preventDefault(); handleVerify(); }}>
+                        <EuiFormRow label="Certificate Hash" fullWidth>
+                            <EuiFieldText
+                                value={certificateHash}
+                                onChange={(e) => setCertificateHash(e.target.value)}
+                                placeholder="Enter certificate hash"
+                                fullWidth
+                                disabled={!!verificationResult}
+                            />
+                        </EuiFormRow>
+                        <EuiFormRow label="reCAPTCHA" fullWidth>
+                            <ReCAPTCHA
+                                ref={recaptchaRef}
+                                sitekey={process.env.REACT_APP_RECAPTCHA_SITE_KEY!}
+                                onChange={onRecaptchaChange}
+                            />
+                        </EuiFormRow>
+                        <EuiSpacer />
+                        <EuiButton type="submit" fill isDisabled={!!verificationResult}>Verify</EuiButton>
+                    </EuiForm>
+                    <EuiSpacer size="m" />
+                    {error && <EuiCallOut color="danger" title="Error">{error}</EuiCallOut>}
+                    {verificationResult && (
+                        <EuiCallOut color={verificationResult.is_valid ? 'success' : 'danger'} title="Verification Result">
+                            <p>Is Valid: {verificationResult.is_valid ? 'Yes' : 'No'}</p>
+                            <p>Is Revoked: {verificationResult.is_revoked ? 'Yes' : 'No'}</p>
+                            {verificationResult.is_valid && (
+                                <>
+                                    <p>Issuer: {verificationResult.issuer}</p>
+                                    <p>Student: {verificationResult.student}</p>
+                                </>
+                            )}
+                        </EuiCallOut>
                     )}
-                    {verificationResult.error && <p style={{ color: 'red' }}>{verificationResult.error}</p>}
-                </div>
-            )}
-        </div>
+                </EuiCard>
+            </EuiPageBody>
+        </EuiPage>
     );
 };
 

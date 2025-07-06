@@ -10,7 +10,7 @@ import {
   EuiLoadingSpinner,
 } from '@elastic/eui';
 import { useAuth } from '../contexts/AuthContext';
-import api from '../services/api';
+import { fetchCertificates } from '../services/api';
 
 const certificateColumns = [
   { field: 'hash', name: 'Certificate Hash', width: '40%' },
@@ -27,11 +27,11 @@ const CertificatesList = () => {
 
   useEffect(() => {
     if (isAuthenticated) {
-      const fetchCertificates = async () => {
+      const fetchCertificatesList = async () => {
         try {
           setLoading(true);
-          const response = await api.get('/student/certificates');
-          setCertificates(response.data);
+          const certificatesData = await fetchCertificates();
+          setCertificates(certificatesData);
         } catch (err: any) {
           setError(err.response?.data?.error || 'Failed to load certificates.');
         } finally {
@@ -39,7 +39,7 @@ const CertificatesList = () => {
         }
       };
 
-      fetchCertificates();
+      fetchCertificatesList();
     }
   }, [isAuthenticated]);
 
