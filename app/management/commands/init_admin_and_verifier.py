@@ -39,3 +39,48 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.WARNING(f'User model has no is_verifier field'))
 
+        # --- Blockchain contract deployment and admin role setup ---
+        try:
+            from web3 import Web3
+            import json
+            import os
+            GANACHE_URL = 'http://localhost:8545'
+            CONTRACTS_DIR = 'contracts'
+            CONTRACT_NAME = 'CertificateRegistry'
+            CONTRACT_ADDRESS_PATH = os.path.join(CONTRACTS_DIR, f'{CONTRACT_NAME}.txt')
+            ABI_PATH = os.path.join(CONTRACTS_DIR, f'{CONTRACT_NAME}.abi')
+            BIN_PATH = os.path.join(CONTRACTS_DIR, f'{CONTRACT_NAME}.bin')
+            w3 = Web3(Web3.HTTPProvider(GANACHE_URL))
+            admin_account = w3.eth.accounts[0]
+            # Deploy contract if not already deployed
+            if not os.path.exists(CONTRACT_ADDRESS_PATH):
+                self.stdout.write(self.style.WARNING(f"Contract address file not found. Deploying {CONTRACT_NAME}..."))
+                with open(ABI_PATH, 'r') as f:
+                    abi = json.load(f)
+                with open(BIN_PATH, 'r') as f:
+                    bytecode = f.read().strip()
+                contract = w3.eth.contract(abi=abi, bytecode=bytecode)
+                tx_hash = contract.constructor().transact({'from': admin_account})
+                tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+                contract_address = tx_receipt.contractAddress
+                with open(CONTRACT_ADDRESS_PATH, 'w') as f:
+                    f.write(contract_address)
+                self.stdout.write(self.style.SUCCESS(f"Deployed {CONTRACT_NAME} at {contract_address}"))
+            else:
+                with open(CONTRACT_ADDRESS_PATH, 'r') as f:
+                    contract_address = f.read().strip()
+                self.stdout.write(self.style.SUCCESS(f"{CONTRACT_NAME} already deployed at {contract_address}"))
+                with open(ABI_PATH, 'r') as f:
+                    abi = json.load(f)
+            contract = w3.eth.contract(address=contract_address, abi=abi)
+            DEFAULT_ADMIN_ROLE = w3.keccak(text="DEFAULT_ADMIN_ROLE")
+            has_role = contract.functions.hasRole(DEFAULT_ADMIN_ROLE, admin_account).call()
+            if not has_role:
+                self.stdout.write(self.style.WARNING(f"Granting DEFAULT_ADMIN_ROLE to {admin_account} on blockchain..."))
+                tx = contract.functions.grantRole(DEFAULT_ADMIN_ROLE, admin_account).transact({'from': admin_account})
+                w3.eth.wait_for_transaction_receipt(tx)
+                self.stdout.write(self.style.SUCCESS(f"Granted DEFAULT_ADMIN_ROLE to {admin_account} on blockchain."))
+            else:
+                self.stdout.write(self.style.SUCCESS(f"Account {admin_account} already has DEFAULT_ADMIN_ROLE on blockchain."))
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f"Blockchain contract deployment/admin role setup failed: {e}"))

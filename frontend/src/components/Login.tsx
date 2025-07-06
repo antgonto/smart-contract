@@ -65,8 +65,14 @@ export const Login: React.FC<LoginProps> = ({ isOpen, onClose, loginType }) => {
                 address,
                 signature, // Send the signature, not the private key
             });
-            const { access, refresh, roles } = loginResponse.data;
-            console.log(access, refresh, roles);
+            const { access, refresh } = loginResponse.data;
+            // Blockchain role verification
+            const rolesResponse = await api.post('/app/v1/smartcontracts/smartcontract/check_roles/', { address, signature });
+            const roles = rolesResponse.data.roles || [];
+            if (roles.length === 0) {
+                setError('No blockchain role assigned to this address.');
+                return;
+            }
             login(access, roles);
             onClose(); // Close modal on successful login
         } catch (err: any) {

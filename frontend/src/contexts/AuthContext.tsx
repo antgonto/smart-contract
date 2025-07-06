@@ -43,11 +43,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const login = (newToken: string, newRoles: string[]) => {
         localStorage.setItem('token', newToken);
-        localStorage.setItem('roles', JSON.stringify(newRoles[0]));
+        localStorage.setItem('roles', JSON.stringify(newRoles));
         setToken(newToken);
         setRoles(newRoles);
-        setIsAdmin(false); // Ensure admin state is cleared
-        localStorage.removeItem('isAdmin');
+        setIsAdmin(newRoles.includes('Admin'));
+        if (newRoles.includes('Admin')) {
+            localStorage.setItem('isAdmin', 'true');
+        } else {
+            localStorage.removeItem('isAdmin');
+        }
     };
 
     const logout = () => {
@@ -64,20 +68,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setError(null);
         setSuccess(null);
         try {
-            const response = await api.post('/api/admin/login/', { username, password });
-            if (response.data.success) {
-                setSuccess('Admin login successful');
-                localStorage.setItem('isAdmin', 'true');
-                setIsAdmin(true);
-                setToken(null); // Clear any existing user token
-                localStorage.removeItem('token');
-            } else {
-                setError(response.data.error || 'Invalid credentials');
-            }
+            const res = await api.post('/admin/login/', { username, password });
+            const { token, roles } = res.data;
+            login(token, roles.includes('Admin') ? ['Admin'] : roles);
+            setSuccess('Admin login successful');
         } catch (err: any) {
-            setError(err.response?.data?.error || 'An error occurred during admin login.');
+            setError(err.response?.data?.error || 'Admin login failed');
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     // Compute address, isAuthenticated based on admin or token

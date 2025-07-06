@@ -19,6 +19,10 @@ from django.contrib.sessions.models import Session
 from django.utils import timezone
 from app.api.wallet.router import get_balance
 import traceback
+from django.conf import settings
+from ninja import Schema
+from ninja.responses import Response
+from typing import List
 
 router = Router(tags=["smartcontract"])
 
@@ -116,6 +120,19 @@ class DashboardWalletBalanceRequest(Schema):
     rpc_url: str
 
 
+class RolesResponse(Schema):
+    roles: List[str]
+
+
+class ErrorResponse(Schema):
+    error: str
+
+
+class CheckRolesRequest(BaseModel):
+    address: str
+    signature: str
+
+
 @router.post("/register/", response=CertificateOut)
 def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
     contract = manager.get_contract()
@@ -167,9 +184,17 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
         )
     except Exception as e:
         from web3.exceptions import ContractLogicError
-        if isinstance(e, ContractLogicError) and "Certificate already exists" in str(e):
-            raise HttpError(409, "Certificate already exists for this hash.")
-        raise
+        import logging
+        logging.error(f"Certificate registration failed: {e}")
+        if isinstance(e, ContractLogicError):
+            if "Certificate already exists" in str(e):
+                raise HttpError(409, "Certificate already exists for this hash.")
+            elif "revert" in str(e):
+                raise HttpError(400, f"Smart contract reverted: {str(e)}")
+        if "invalid address" in str(e).lower():
+            raise HttpError(400, f"Invalid Ethereum address: {recipient}")
+        # Add more detailed error for debugging
+        raise HttpError(500, f"Certificate registration failed: {str(e)}. Please check if the issuer has the correct role and the contract is deployed.")
 
 
 @router.post("/compile/", response=CompileResponse)
@@ -530,3 +555,123 @@ def dashboard_wallet_gas_balance(request, data: DashboardWalletBalanceRequest):
     # Use the wallet balance endpoint logic
     balance_response = get_balance(request, data)
     return DashboardMetrics(wallet_gas_balance=balance_response.balance)
+
+
+@router.post("/check_admin_role/")
+def check_admin_role(request, address: str):
+    """Check if the given address has the Admin role (DEFAULT_ADMIN_ROLE) on the blockchain."""
+    try:
+        manager.connect_web3(settings.WEB3_PROVIDER_URI)
+        manager.load_abi()
+        manager.load_address()
+        manager.update_contract()
+        contract = manager.contract
+        if not contract:
+            raise Exception("Contract not loaded")
+        DEFAULT_ADMIN_ROLE = Web3.keccak(text='DEFAULT_ADMIN_ROLE').hex()
+        has_role = contract.functions.hasRole(DEFAULT_ADMIN_ROLE, Web3.to_checksum_address(address)).call()
+        return {"is_admin": has_role}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.post("/grant_role/")
+def grant_role(request, address: str, role: str):
+    """Grant a role (Admin, Issuer, Student) to an address."""
+    try:
+        manager.connect_web3(settings.WEB3_PROVIDER_URI)
+        manager.load_abi()
+        manager.load_address()
+        manager.update_contract()
+        contract = manager.contract
+        if not contract:
+            raise Exception("Contract not loaded")
+        if role == 'Admin':
+            role_hash = Web3.keccak(text='DEFAULT_ADMIN_ROLE').hex()
+        elif role == 'Issuer':
+            role_hash = contract.functions.ISSUER_ROLE().call()
+        elif role == 'Student':
+            role_hash = Web3.keccak(text='STUDENT_ROLE').hex()
+        else:
+            raise Exception("Invalid role")
+        admin_private_key = settings.ETH_ADMIN_PRIVATE_KEY
+        admin_address = settings.DJANGO_NINJA_ADMIN_ETH_ADDRESS
+        nonce = manager.web3.eth.get_transaction_count(Web3.to_checksum_address(admin_address))
+        txn = contract.functions.grantRole(role_hash, Web3.to_checksum_address(address)).build_transaction({
+            'from': Web3.to_checksum_address(admin_address),
+            'nonce': nonce,
+            'gas': 500000,
+            'gasPrice': manager.web3.to_wei('5', 'gwei'),
+        })
+        signed_txn = manager.web3.eth.account.sign_transaction(txn, private_key=admin_private_key)
+        tx_hash = manager.web3.eth.send_raw_transaction(signed_txn.rawTransaction)
+        return {"success": True, "tx_hash": tx_hash.hex()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/revoke_role/")
+def revoke_role(request, address: str, role: str):
+    """Revoke a role (Admin, Issuer, Student) from an address."""
+    try:
+        manager.connect_web3(settings.WEB3_PROVIDER_URI)
+        manager.load_abi()
+        manager.load_address()
+        manager.update_contract()
+        contract = manager.contract
+        if not contract:
+            raise Exception("Contract not loaded")
+        if role == 'Admin':
+            role_hash = Web3.keccak(text='DEFAULT_ADMIN_ROLE').hex()
+        elif role == 'Issuer':
+            role_hash = contract.functions.ISSUER_ROLE().call()
+        elif role == 'Student':
+            role_hash = Web3.keccak(text='STUDENT_ROLE').hex()
+        else:
+            raise Exception("Invalid role")
+        admin_private_key = settings.ETH_ADMIN_PRIVATE_KEY
+        admin_address = settings.DJANGO_NINJA_ADMIN_ETH_ADDRESS
+        nonce = manager.web3.eth.get_transaction_count(Web3.to_checksum_address(admin_address))
+        txn = contract.functions.revokeRole(role_hash, Web3.to_checksum_address(address)).build_transaction({
+            'from': Web3.to_checksum_address(admin_address),
+            'nonce': nonce,
+            'gas': 500000,
+            'gasPrice': manager.web3.to_wei('5', 'gwei'),
+        })
+        signed_txn = manager.web3.eth.account.sign_transaction(txn, private_key=admin_private_key)
+        tx_hash = manager.web3.eth.send_raw_transaction(signed_txn.rawTransaction)
+        return {"success": True, "tx_hash": tx_hash.hex()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/check_roles/", response={200: RolesResponse, 400: ErrorResponse})
+def check_roles(request, check_roles_request: CheckRolesRequest):
+    """Return all blockchain roles (Admin, Issuer, Student) for a given address."""
+    address = check_roles_request.address
+    # Optionally, you can verify the signature here if needed
+    try:
+        manager.connect_web3(settings.WEB3_PROVIDER_URI)
+        manager.load_abi()
+        manager.load_address()
+        manager.update_contract()
+        contract = manager.contract
+        if not contract:
+            return Response({"error": "Contract not loaded"}, status=400)
+        roles = []
+        # Check Admin
+        if contract.functions.hasRole(Web3.keccak(text='DEFAULT_ADMIN_ROLE').hex(), Web3.to_checksum_address(address)).call():
+            roles.append('Admin')
+        # Check Issuer
+        if contract.functions.hasRole(contract.functions.ISSUER_ROLE().call(), Web3.to_checksum_address(address)).call():
+            roles.append('Issuer')
+        # Check Student (if implemented)
+        try:
+            student_role_hash = Web3.keccak(text='STUDENT_ROLE').hex()
+            if contract.functions.hasRole(student_role_hash, Web3.to_checksum_address(address)).call():
+                roles.append('Student')
+        except Exception:
+            pass
+        return {"roles": roles}
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)

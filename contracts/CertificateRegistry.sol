@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
+import "./AccessControl.sol";
 
 contract CertificateRegistry is AccessControl {
     bytes32 public constant ISSUER_ROLE = keccak256("ISSUER_ROLE");
+    bytes32 public constant ADMIN_ROLE = DEFAULT_ADMIN_ROLE;
 
     struct Certificate {
         bytes32 certHash;
@@ -74,6 +75,11 @@ contract CertificateRegistry is AccessControl {
     function getRoles(address account) external view returns (string[] memory) {
         string[] memory rolesTmp = new string[](2);
         uint count = 0;
+
+        if (hasRole(ADMIN_ROLE, account)) {
+            rolesTmp[count] = "Admin";
+            count++;
+        }
         if (hasRole(ISSUER_ROLE, account)) {
             rolesTmp[count] = "Issuer";
             count++;

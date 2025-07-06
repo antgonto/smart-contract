@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import {
-  EuiPage, EuiPageBody, EuiPageSection, EuiCard,
-  EuiForm, EuiFormRow, EuiFieldText, EuiButton, EuiSpacer, EuiCallOut, EuiFieldPassword,
-  EuiSelect, EuiBasicTable, EuiFlexGroup, EuiFlexItem
+  EuiPage, EuiPageBody, EuiCard,
+  EuiForm, EuiFormRow, EuiFieldText, EuiButton, EuiCallOut, EuiFieldPassword
 } from '@elastic/eui';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
@@ -16,25 +15,29 @@ const AdminDashboard: React.FC = () => {
   const [address, setAddress] = useState('');
   const [adminSecret, setAdminSecret] = useState('');
   const [walletName, setWalletName] = useState('');
-  const [walletRole, setWalletRole] = useState<'Issuer' | 'Student'>('Student');
+  const [walletRole, setWalletRole] = useState<'Issuer' | 'Student' | 'Admin'>('Student');
   const [wallets, setWallets] = useState<any[]>([]);
-  const [accounts, setAccounts] = useState<any[]>([]);
   const [walletLoading, setWalletLoading] = useState(false);
   const [walletError, setWalletError] = useState('');
   const [walletSuccess, setWalletSuccess] = useState('');
-  const [showAccountsTable, setShowAccountsTable] = useState(false);
+  const [blockchainAdminVerified, setBlockchainAdminVerified] = useState(false);
 
-  const isAdmin = isAuthenticated && roles && roles.includes('admin');
+  const isAdmin = isAuthenticated && roles && roles.includes('Admin');
 
+  // Dropdown options for roles
+  const roleOptions = [
+    { value: 'Issuer', text: 'Issuer' },
+    { value: 'Student', text: 'Student' },
+    { value: 'Admin', text: 'Admin' },
+  ];
+
+  // Add Admin to the role selection
   const handleRoleChange = async (action: 'grant' | 'revoke') => {
     try {
-      const endpoint = action === 'grant' ? '/grant_issuer_role' : '/revoke_issuer_role';
-      const res = await axios.post(`${API_BASE}${endpoint}`,
-        { address },
-        { headers: { 'X-Admin-Auth': adminSecret } }
-      );
+      const endpoint = `/app/v1/smartcontracts/${action}_role/`;
+      const res = await axios.post(endpoint, { address, role: walletRole });
       if (res.data.success) {
-        setWalletSuccess(`Successfully ${action}ed ISSUER_ROLE for ${address}. Tx: ${res.data.tx_hash}`);
+        setWalletSuccess(`Successfully ${action}ed ${walletRole.toUpperCase()}_ROLE for ${address}. Tx: ${res.data.tx_hash}`);
         setWalletError('');
       } else {
         setWalletError(res.data.error || 'An unknown error occurred.');
@@ -49,7 +52,36 @@ const AdminDashboard: React.FC = () => {
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     await adminLogin(adminUsername, adminPassword);
+    // After Django login, check blockchain admin role
+    try {
+      const res = await axios.post('/app/v1/smartcontracts/check_admin_role/', { address: adminUsername });
+      if (res.data.is_admin) {
+        setBlockchainAdminVerified(true);
+        setWalletError('');
+      } else {
+        setBlockchainAdminVerified(false);
+        setWalletError('This account does not have the Admin role on the blockchain.');
+      }
+    } catch (err: any) {
+      setBlockchainAdminVerified(false);
+      setWalletError('Blockchain admin role verification failed.');
+    }
   };
+
+  // Add similar blockchain role check for Issuer and Student logins
+  // This logic should be in your main login handler (not just admin)
+  // Example implementation for a unified login handler:
+  //
+  // const handleUnifiedLogin = async (address, password) => {
+  //   // ...existing login logic (Django or JWT)...
+  //   const res = await axios.post('/app/v1/smartcontracts/check_roles/', { address });
+  //   if (res.data.roles && res.data.roles.length > 0) {
+  //     // Set roles in context based on blockchain roles
+  //     // e.g., login(token, res.data.roles)
+  //   } else {
+  //     // Show error: No blockchain role assigned
+  //   }
+  // }
 
   const fetchWallets = async () => {
     setWalletLoading(true);
@@ -63,22 +95,9 @@ const AdminDashboard: React.FC = () => {
     setWalletLoading(false);
   };
 
-  const fetchAccounts = async () => {
-    setWalletLoading(true);
-    setWalletError('');
-    try {
-      const res = await axios.get('/app/v1/smartcontracts/account/list');
-      setAccounts(res.data);
-    } catch (err: any) {
-      setWalletError('Failed to fetch accounts.');
-    }
-    setWalletLoading(false);
-  };
-
   React.useEffect(() => {
     if (isAdmin) {
       fetchWallets();
-      fetchAccounts();
     }
   }, [isAdmin]);
 
@@ -101,33 +120,7 @@ const AdminDashboard: React.FC = () => {
     setWalletLoading(false);
   };
 
-  const accountColumns = [
-    { field: 'name', name: 'Name' },
-    { field: 'address', name: 'Address' },
-    { field: 'balance', name: 'Balance (ETH)' },
-    { field: 'created_at', name: 'Created At' },
-    {
-      field: 'transactions',
-      name: 'Transactions',
-      render: (transactions: any[]) => (
-        <EuiBasicTable
-          items={transactions}
-          columns={[
-            { field: 'hash', name: 'Tx Hash' },
-            { field: 'from', name: 'From' },
-            { field: 'to', name: 'To' },
-            { field: 'value', name: 'Value (ETH)' },
-            { field: 'timestamp', name: 'Timestamp' },
-          ]}
-          noItemsMessage="No transactions found."
-          pagination={false}
-          sorting={false}
-        />
-      ),
-    },
-  ];
-
-  if (!isAdmin) {
+  if (!isAdmin || !blockchainAdminVerified) {
     return (
       <EuiCard title="Admin Login">
         <EuiForm component="form" onSubmit={handleAdminLogin}>
@@ -151,6 +144,7 @@ const AdminDashboard: React.FC = () => {
           <EuiButton type="submit" isLoading={loading} fill>Login</EuiButton>
         </EuiForm>
         {error && <EuiCallOut color="danger" title="Error">{error}</EuiCallOut>}
+        {walletError && <EuiCallOut color="danger" title="Error">{walletError}</EuiCallOut>}
         {success && <EuiCallOut color="success" title="Success">{success}</EuiCallOut>}
       </EuiCard>
     );

@@ -22,6 +22,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import Dashboard from "./pages/Dashboard";
 import AllAccountsView from './pages/AllAccountsView';
 import CreateWalletView from './pages/CreateWalletView';
+import StudentDiplomas from './pages/StudentDiplomas';
 
 function App() {
   return (
@@ -47,6 +48,7 @@ function App() {
                   <Route path="/verify-certificate" element={<VerificationPortal />} />
                   <Route path="/admin-dashboard" element={<AdminDashboard />} />
                   <Route path="/create-wallet" element={<CreateWalletView />} />
+                  <Route path="/my-diplomas" element={<StudentDiplomas />} />
                   {/* Additional routes can be added here */}
                 </Routes>
               </EuiFlexItem>

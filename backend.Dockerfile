@@ -22,6 +22,15 @@ RUN apt-get update && apt-get install -y wget && \
     chmod +x /usr/local/bin/solc && \
     apt-get remove -y wget && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
+# Install Node.js and npm
+RUN apt-get update && apt-get install -y curl && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    apt-get remove -y curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
+# Install npm dependencies (including Hardhat)
+COPY package.json package-lock.json* ./
+RUN npm install --legacy-peer-deps
 
 COPY . .
 

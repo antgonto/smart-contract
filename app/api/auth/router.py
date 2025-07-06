@@ -1,5 +1,5 @@
 from ninja import Router
-from ninja.responses import JsonResponse
+from ninja.responses import JsonResponse, Response
 from pydantic import BaseModel
 import random
 import string
@@ -34,6 +34,9 @@ class TokenResponse(BaseModel):
     refresh: str
     roles: list[str]
 
+class ErrorResponse(BaseModel):
+    error: str
+
 def get_tokens_for_user(user, roles=[]):
     refresh = RefreshToken.for_user(user)
     # Add custom claims
@@ -62,22 +65,22 @@ def sign_challenge_with_key(request, data: SignChallengeRequest):
         # In a real app, log the error and return a more generic message
         return JsonResponse(status_code=400, content={"error": f"Failed to sign message: {e}"})
 
-@router.post("/login", response=TokenResponse)
+@router.post("/login", response={200: TokenResponse, 400: ErrorResponse, 401: ErrorResponse})
 def login(request, login_data: LoginRequest):
     address = Web3.to_checksum_address(login_data.address)
     nonce = cache.get(f"auth_nonce_{address.lower()}")
 
     if not nonce:
-        return 400, {"error": "Challenge expired or not found."}
+        return Response({"error": "Challenge expired or not found."}, status=400)
 
     message = encode_defunct(text=nonce)
 
     try:
         recovered_address = EthAccount.recover_message(message, signature=login_data.signature)
         if recovered_address.lower() != address.lower():
-            return 401, {"error": "Signature verification failed."}
+            return Response({"error": "Signature verification failed."}, status=401)
     except Exception:
-        return 400, {"error": "Invalid signature format."}
+        return Response({"error": "Invalid signature format."}, status=400)
 
     # Signature is valid, proceed with login/user creation
     cache.delete(f"auth_nonce_{address.lower()}")

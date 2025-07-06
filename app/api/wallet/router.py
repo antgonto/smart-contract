@@ -214,21 +214,29 @@ def create_wallet(request, data: WalletCreateRequest):
         from ninja.errors import HttpError
         raise HttpError(500, f"Failed to fund wallet: {str(e)}")
 
-    # Assign contract role if needed
-    abi, contract_address = get_certificate_registry_contract()
-    contract = w3.eth.contract(address=contract_address, abi=abi)
+    # If the account is created with the Issuer role, grant ISSUER_ROLE on the smart contract
     if data.role == "Issuer":
-        # Grant ISSUER_ROLE to the new address
-        admin_account = w3.eth.account.from_key(funder_private_key)
-        tx = contract.functions.grantIssuerRole(address).build_transaction({
-            'from': funder_address,
-            'nonce': w3.eth.get_transaction_count(funder_address),
-            'gas': 200000,
-            'gasPrice': w3.to_wei('1', 'gwei'),
-        })
-        signed = admin_account.sign_transaction(tx)
-        w3.eth.send_raw_transaction(signed.raw_transaction)
-    # Get roles from contract
+        try:
+            abi, contract_address = get_certificate_registry_contract()
+            w3 = Web3(Web3.HTTPProvider(GANACHE_URL))
+            contract = w3.eth.contract(address=contract_address, abi=abi)
+            funder_address, funder_private_key = get_ganache_funder(w3)
+            admin_account = w3.eth.account.from_key(funder_private_key)
+            tx = contract.functions.grantIssuerRole(address).build_transaction({
+                'from': funder_address,
+                'nonce': w3.eth.get_transaction_count(funder_address),
+                'gas': 200000,
+                'gasPrice': w3.to_wei('1', 'gwei'),
+            })
+            signed = admin_account.sign_transaction(tx)
+            w3.eth.send_raw_transaction(signed.raw_transaction)
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to grant ISSUER_ROLE to {address}: {e}")
+    # Always load contract for role fetching
+    abi, contract_address = get_certificate_registry_contract()
+    w3 = Web3(Web3.HTTPProvider(GANACHE_URL))
+    contract = w3.eth.contract(address=contract_address, abi=abi)
     roles = contract.functions.getRoles(address).call()
     return WalletCreateResponse(
         id=wallet.id,

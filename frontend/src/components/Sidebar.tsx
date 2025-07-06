@@ -16,7 +16,7 @@ import { Login } from './Login';
 const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, address, logout, roles: contextRoles } = useAuth();
+  const { isAuthenticated, logout, roles: contextRoles } = useAuth();
   // Memoize roles to avoid unnecessary re-renders and fix react-hooks/exhaustive-deps warning
   const roles = React.useMemo(() => contextRoles || [], [contextRoles]);
   const [isLoginModalOpen, setIsLoginModalOpen] = React.useState(false);
@@ -97,26 +97,49 @@ const Sidebar = () => {
     },
   ];
 
-  const adminLoginNavItem = {
-    id: 'admin-dashboard',
-    name: 'Admin Login',
-    onClick: () => {
-      navigate('/admin-dashboard');
-      // After successful login, redirect to root
-      // This requires handling in the login logic/modal, not just here
-    },
-    icon: <EuiIcon type="user" />,
-  };
+  // Add My Diplomas for students only
+  if (roles.includes('Student')) {
+    allNavItems.push({
+      id: 'my-diplomas',
+      name: 'My Diplomas',
+      onClick: () => navigate('/my-diplomas'),
+      isSelected: location.pathname === '/my-diplomas',
+      icon: <EuiIcon type="graduationCap" />,
+    });
+  }
 
-  const userLoginNavItem = {
-    id: 'user-login',
-    name: 'Issuer/Student Login',
-    onClick: () => {
-      setLoginType('user');
-      setIsLoginModalOpen(true);
-    },
-    icon: <EuiIcon type="user" />,
-  };
+  // Add Admin Dashboard for Admins only
+  if (roles.includes('Admin')) {
+    allNavItems.push({
+      id: 'admin-dashboard',
+      name: 'Admin Dashboard',
+      onClick: () => navigate('/admin-dashboard'),
+      isSelected: location.pathname === '/admin-dashboard',
+      icon: <EuiIcon type="user" />,
+    });
+  }
+
+  // Add unified login option before Verify Certificate if not authenticated
+  if (!isAuthenticated) {
+    const loginNavItem = {
+      id: 'unified-login',
+      name: 'Login',
+      onClick: () => {
+        setLoginType('user');
+        setIsLoginModalOpen(true);
+      },
+      icon: <EuiIcon type="user" />,
+      isSelected: false,
+      isAdmin: false,
+    };
+    // Find the index of Verify Certificate
+    const verifyIndex = publicNavItems.findIndex(item => item.id === 'verify-certificate');
+    if (verifyIndex !== -1) {
+      publicNavItems.splice(verifyIndex, 0, loginNavItem);
+    } else {
+      publicNavItems.unshift(loginNavItem);
+    }
+  }
 
   // Add logout nav item for authenticated users
   const logoutNavItem = {
@@ -142,9 +165,6 @@ const Sidebar = () => {
         if (userIsAdmin) {
           return item.isAdmin === true;
         }
-        if (item.isIssuer && !roles.includes('issuer')) {
-          return false;
-        }
         // Hide admin-only items for non-admin users
         return !item.isAdmin;
       })
@@ -164,7 +184,7 @@ const Sidebar = () => {
       id: 0,
       items: isAuthenticated
         ? cleanNavItems(navItemsWithLogout)
-        : cleanNavItems([...publicNavItems, adminLoginNavItem, userLoginNavItem]),
+        : cleanNavItems(publicNavItems),
     }
   ];
 

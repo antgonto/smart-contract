@@ -59,4 +59,17 @@ export const persistTransaction = async (transaction: any) => {
   return api.post('/api/transactions/', transaction);
 };
 
+export const fetchStudentDiplomas = async (address: string) => {
+  // The backend uses the JWT to determine the student, so address is not needed, but kept for compatibility
+  const response = await api.get('/student/certificates');
+  // Map backend fields to expected frontend fields (including issue_date)
+  return response.data.map((item: any, idx: number) => ({
+    id: idx + 1,
+    cert_hash: item.hash,
+    ipfs_hash: item.ipfs_cid || item.ipfsHash || '',
+    issue_date: item.timestamp, // assuming timestamp is the issue date
+    ...item,
+  }));
+};
+
 export default api;
