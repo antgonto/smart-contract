@@ -13,6 +13,7 @@ contract CertificateRegistry is AccessControl {
         uint256 issuedAt;
         string ipfsCid; // Changed from metadata
         bool isRevoked;
+        string role; // New: role of the user who registered (e.g., "issuer")
     }
 
     mapping(bytes32 => Certificate) public certificates;
@@ -35,7 +36,8 @@ contract CertificateRegistry is AccessControl {
             student: student,
             issuedAt: block.timestamp,
             ipfsCid: ipfsCid,
-            isRevoked: false
+            isRevoked: false,
+            role: "issuer" // Only issuers can register
         });
 
         certificates[certHash] = cert;
@@ -58,8 +60,34 @@ contract CertificateRegistry is AccessControl {
         return (cert.issuer, cert.student, cert.issuedAt, cert.isRevoked);
     }
 
+    function getCertificateWithRole(bytes32 certHash) external view returns (address issuer, address student, uint256 timestamp, bool isRevoked, string memory role) {
+        require(certificates[certHash].issuedAt != 0, "Certificate does not exist");
+        Certificate memory cert = certificates[certHash];
+        return (cert.issuer, cert.student, cert.issuedAt, cert.isRevoked, cert.role);
+    }
+
     function getCertificatesByStudent(address student) external view returns (bytes32[] memory) {
         return certificatesByStudent[student];
+    }
+
+    // Returns the roles of an address (issuer, student, or both)
+    function getRoles(address account) external view returns (string[] memory) {
+        string[] memory rolesTmp = new string[](2);
+        uint count = 0;
+        if (hasRole(ISSUER_ROLE, account)) {
+            rolesTmp[count] = "issuer";
+            count++;
+        }
+        // If the account has at least one certificate as student, consider it a student
+        if (certificatesByStudent[account].length > 0) {
+            rolesTmp[count] = "student";
+            count++;
+        }
+        string[] memory roles = new string[](count);
+        for (uint i = 0; i < count; i++) {
+            roles[i] = rolesTmp[i];
+        }
+        return roles;
     }
 
     // Add a function to allow admin to grant ISSUER_ROLE to an address

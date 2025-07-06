@@ -1,4 +1,5 @@
 from ninja import Router
+from ninja.responses import JsonResponse
 from pydantic import BaseModel
 import random
 import string
@@ -10,7 +11,6 @@ from web3 import Web3
 
 from app.api.smartcontract.contract_manager import ContractManager
 from app.models import CustomUser, Account as UserAccount
-
 
 manager = ContractManager()
 manager.refresh()
@@ -32,6 +32,7 @@ class SignChallengeRequest(BaseModel):
 class TokenResponse(BaseModel):
     access: str
     refresh: str
+    roles: list[str]
 
 def get_tokens_for_user(user, roles=[]):
     refresh = RefreshToken.for_user(user)
@@ -59,7 +60,7 @@ def sign_challenge_with_key(request, data: SignChallengeRequest):
         return {"signature": signed_message.signature.hex()}
     except Exception as e:
         # In a real app, log the error and return a more generic message
-        return JSONResponse(status_code=400, content={"error": f"Failed to sign message: {e}"})
+        return JsonResponse(status_code=400, content={"error": f"Failed to sign message: {e}"})
 
 @router.post("/login", response=TokenResponse)
 def login(request, login_data: LoginRequest):
@@ -94,30 +95,24 @@ def login(request, login_data: LoginRequest):
         account.user = user
         account.save()
 
-    # Check for roles
+    # Check for roles using the smart contract
     roles = []
-    if user.is_superuser:
-        roles.append("admin")
-
     try:
         contract = manager.get_contract()
         if contract is None:
-            # Try to deploy the contract automatically if not found
             from app.api.smartcontract.router import deploy_contract
             deploy_contract(request)
             manager.refresh()
             contract = manager.get_contract()
-        issuer_role = contract.functions.ISSUER_ROLE().call()
-        if contract.functions.hasRole(issuer_role, address).call():
-            roles.append("issuer")
+        # Call getRoles(address) from the contract
+        contract_roles = contract.functions.getRoles(address).call()
+        if contract_roles:
+            roles = [r for r in contract_roles if r]
     except Exception as e:
-        # Could fail if contract not deployed or other issue. Log this.
-        print(f"Could not check issuer role for {address}: {e}")
-
-    # For now, we can assume any user with a certificate is a student
-    # A more robust check would be needed in a real application
+        print(f"Could not check roles for {address}: {e}")
+    # Fallback: if no roles, assign 'student' by default
     if not roles:
         roles.append("student")
 
     tokens = get_tokens_for_user(user, roles)
-    return tokens
+    return TokenResponse(access=tokens["access"], refresh=tokens["refresh"], roles=roles)

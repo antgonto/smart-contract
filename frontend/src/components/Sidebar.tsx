@@ -14,7 +14,9 @@ import { Login } from './Login';
 const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, address, logout, roles } = useAuth();
+  const { isAuthenticated, address, logout, roles: contextRoles } = useAuth();
+  // Memoize roles to avoid unnecessary re-renders and fix react-hooks/exhaustive-deps warning
+  const roles = React.useMemo(() => contextRoles || [], [contextRoles]);
   const [isLoginModalOpen, setIsLoginModalOpen] = React.useState(false);
   const [loginType, setLoginType] = React.useState<'admin' | 'user'>('user');
 
@@ -121,6 +123,11 @@ const Sidebar = () => {
     </EuiText>
   );
 
+  // Show role label at the very top of the sidebar
+  const roleLabel = isAuthenticated && roles.length > 0
+    ? (roles.includes('admin') ? 'Admin' : roles.includes('issuer') ? 'Issuer' : 'Student')
+    : '';
+
   const visibleItems = isAuthenticated
     ? allNavItems.filter(item => {
         const userIsAdmin = roles.includes('admin');
@@ -161,6 +168,12 @@ const Sidebar = () => {
 
   return (
     <div style={{ width: '200px', height: '100%', background: '#1a1c21', padding: '16px' }}>
+      {/* Role label at the top */}
+      {isAuthenticated && roleLabel && (
+        <EuiText size="s" style={{ marginBottom: 16, textAlign: 'center', fontWeight: 'bold', color: '#FFD700' }}>
+          {roleLabel}
+        </EuiText>
+      )}
       <EuiFlexGroup alignItems="center" gutterSize="s">
         <EuiFlexItem grow={false}>
           <EuiIcon type="securityApp" size="xl" />
@@ -174,7 +187,6 @@ const Sidebar = () => {
       <EuiSpacer size="l" />
       {isAuthenticated && userLabel}
       <EuiSideNav items={sideNavItems} />
-
 
       <Login isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} loginType={loginType} />
     </div>

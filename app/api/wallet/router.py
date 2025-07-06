@@ -96,6 +96,7 @@ class WalletCreateResponse(BaseModel):
     id: int
     name: str
     created_at: str
+    roles: list[str]
 
 class WalletImportRequest(BaseModel):
     mnemonic: str
@@ -203,6 +204,7 @@ def create_wallet(request, data: WalletCreateRequest):
     # Optionally, wait for receipt
     w3.eth.wait_for_transaction_receipt(tx_hash)
     # After funding the new wallet, if role is issuer, grant on-chain role
+    roles = []
     if data.role == 'issuer':
         w3 = Web3(Web3.HTTPProvider(GANACHE_URL))
         abi, contract_address = get_certificate_registry_contract()
@@ -219,7 +221,10 @@ def create_wallet(request, data: WalletCreateRequest):
         signed_tx = admin_account.sign_transaction(tx)
         tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
         w3.eth.wait_for_transaction_receipt(tx_hash)
-    return WalletCreateResponse(id=wallet.id, name=wallet.name, created_at=wallet.created_at.isoformat())
+        roles.append('issuer')
+    else:
+        roles.append('student')
+    return WalletCreateResponse(id=wallet.id, name=wallet.name, created_at=wallet.created_at.isoformat(), roles=roles)
 
 @router.get("/list", response=list[WalletListItem])
 def list_wallets(request):

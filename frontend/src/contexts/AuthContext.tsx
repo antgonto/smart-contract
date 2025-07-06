@@ -13,7 +13,7 @@ interface AuthState {
 }
 
 interface AuthContextType extends AuthState {
-    login: (token: string) => void;
+    login: (token: string, roles: string[]) => void;
     logout: () => void;
     adminLogin: (username: string, password: string) => Promise<void>;
 }
@@ -26,22 +26,36 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+    const [roles, setRoles] = useState<string[]>(() => {
+        const stored = localStorage.getItem('roles');
+        if (!stored || stored === 'undefined') return [];
+        try {
+            const parsed = JSON.parse(stored);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    });
     const [isAdmin, setIsAdmin] = useState<boolean>(() => !!localStorage.getItem('isAdmin'));
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
 
-    const login = (newToken: string) => {
+    const login = (newToken: string, newRoles: string[]) => {
         localStorage.setItem('token', newToken);
+        localStorage.setItem('roles', JSON.stringify(newRoles));
         setToken(newToken);
+        setRoles(newRoles);
         setIsAdmin(false); // Ensure admin state is cleared
         localStorage.removeItem('isAdmin');
     };
 
     const logout = () => {
         localStorage.removeItem('token');
+        localStorage.removeItem('roles');
         localStorage.removeItem('isAdmin');
         setToken(null);
+        setRoles([]);
         setIsAdmin(false);
     };
 
@@ -66,19 +80,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setLoading(false);
     };
 
-    // Compute address, roles, isAuthenticated based on admin or token
+    // Compute address, isAuthenticated based on admin or token
     let address = null;
-    let roles: string[] = [];
     let isAuthenticated = false;
     if (isAdmin) {
-        roles = ['admin'];
         isAuthenticated = true;
     } else if (token) {
         try {
             const decoded = jwtDecode<{ address: string; roles: string[]; exp: number }>(token);
             if (decoded.exp * 1000 > Date.now()) {
                 address = decoded.address;
-                roles = decoded.roles;
                 isAuthenticated = true;
             }
         } catch (e) {
@@ -88,7 +99,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const contextValue: AuthContextType = {
         token,
         address,
-        roles,
+        roles: isAdmin ? ['admin'] : roles,
         isAuthenticated,
         loading,
         error,
