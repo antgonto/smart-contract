@@ -25,14 +25,6 @@ const Sidebar = () => {
 
   const allNavItems = [
     {
-      id: '1',
-      name: 'Settings',
-      onClick: () => navigate('/settings'),
-      isSelected: location.pathname === '/settings',
-      icon: <EuiIcon type="gear" />,
-      isAdmin: true, // This marks the item as admin-only
-    },
-    {
       id: '2',
       name: 'Telemetry Dashboard',
       onClick: () => navigate('/metrics'),
@@ -94,6 +86,14 @@ const Sidebar = () => {
       isSelected: location.pathname === '/verify-certificate',
       icon: <EuiIcon type="checkInCircleFilled" />,
       isAdmin: true, // Only show for admin
+    },
+    {
+      id: '1',
+      name: 'Settings',
+      onClick: () => navigate('/settings'),
+      isSelected: location.pathname === '/settings',
+      icon: <EuiIcon type="gear" />,
+      isAdmin: true, // This marks the item as admin-only
     },
   ];
 
