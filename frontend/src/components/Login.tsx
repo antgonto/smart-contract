@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import api from '../services/api';
+import api, { checkRoles } from '../services/api';
 import { EuiButton, EuiText, EuiFieldText, EuiSpacer, EuiModal, EuiModalHeader, EuiModalBody, EuiModalFooter, EuiFieldPassword } from '@elastic/eui';
 import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
@@ -37,7 +37,7 @@ export const Login: React.FC<LoginProps> = ({ isOpen, onClose, loginType }) => {
         setError(null);
         setNonce('');
         try {
-            const challengeResponse = await api.get(`/app/v1/smartcontracts/auth/challenge/${address}`);
+            const challengeResponse = await api.get(`/app/v1/smartcontracts/auth/challenge/${address.split(' ')[0]}`);
             setNonce(challengeResponse.data.nonce);
         } catch (err: any) {
             setError(err.response?.data?.error || 'Failed to get challenge.');
@@ -56,19 +56,23 @@ export const Login: React.FC<LoginProps> = ({ isOpen, onClose, loginType }) => {
     };
 
     const handleLogin = async () => {
-        setError(null);
+        if (!privateKey || !nonce) {
+            setError('Private key and a challenge (nonce) are required for login.');
+            return;
+        }
         try {
+            // The nonce is already in the state from handleGetChallenge, no need to fetch it again.
             // Sign the nonce (challenge) with the private key using ethers.js
             const wallet = new ethers.Wallet(privateKey);
             const signature = await wallet.signMessage(nonce);
             const loginResponse = await api.post('/app/v1/smartcontracts/auth/login', {
-                address,
+                address: address.split(' ')[0],
                 signature, // Send the signature, not the private key
             });
             const { access, refresh } = loginResponse.data;
             // Blockchain role verification
-            const rolesResponse = await api.post('/app/v1/smartcontracts/smartcontract/check_roles/', { address, signature });
-            const roles = rolesResponse.data.roles || [];
+            const rolesResponse = await checkRoles(address.split(' ')[0]);
+            const roles = rolesResponse.roles || [];
             if (roles.length === 0) {
                 setError('No blockchain role assigned to this address.');
                 return;

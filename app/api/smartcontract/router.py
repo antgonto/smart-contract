@@ -130,7 +130,11 @@ class ErrorResponse(Schema):
 
 class CheckRolesRequest(BaseModel):
     address: str
-    signature: str
+    signature: str | None = None
+
+
+class StudentRoleRequest(BaseModel):
+    address: str
 
 
 @router.post("/register/", response=CertificateOut)
@@ -264,17 +268,27 @@ def deploy_contract(request):
     deployed_contracts = []
     errors = []
     for file_name in contract_files:
-        base_filename = file_name.rsplit(".", 1)[0]
-        abi_file = f"{base_filename}.abi"
-        bin_file = f"{base_filename}.bin"
+        base_filename = os.path.basename(file_name).rsplit(".", 1)[0]
+        abi_file = os.path.join(manager.contracts_dir, f"{base_filename}.abi")
+        bin_file = os.path.join(manager.contracts_dir, f"{base_filename}.bin")
         # Only deploy if both ABI and BIN exist (i.e., contract has been compiled)
         if not (os.path.exists(abi_file) and os.path.exists(bin_file)):
             errors.append(f"Contract {base_filename} has not been compiled. Skipping deployment.")
             continue
         try:
-            sender_account = manager.web3.eth.accounts[1]
-            addr = SEEDWeb3.deploy_contract(manager.web3, sender_account, abi_file, bin_file, None)
-            with open(f"{base_filename}.txt", "w") as fd:
+            # Use the first account for all deployments
+            sender_account = manager.web3.eth.accounts[0]
+
+            # Special handling for Lock.sol constructor argument
+            args = None
+            if base_filename == "Lock":
+                # Set unlockTime to 1 hour in the future
+                args = int(datetime.datetime.now(datetime.timezone.utc).timestamp()) + 3600
+
+            addr = SEEDWeb3.deploy_contract(manager.web3, sender_account, abi_file, bin_file, args)
+
+            addr_file_path = os.path.join(manager.contracts_dir, f"{base_filename}.txt")
+            with open(addr_file_path, "w") as fd:
                 fd.write(addr)
             deployed_contracts.append(f"Contract deployed successfully: {addr}")
         except Exception as e:
@@ -561,7 +575,7 @@ def dashboard_wallet_gas_balance(request, data: DashboardWalletBalanceRequest):
 def check_admin_role(request, address: str):
     """Check if the given address has the Admin role (DEFAULT_ADMIN_ROLE) on the blockchain."""
     try:
-        manager.connect_web3(settings.WEB3_PROVIDER_URI)
+        manager.connect_web3('ganache')
         manager.load_abi()
         manager.load_address()
         manager.update_contract()
@@ -577,9 +591,9 @@ def check_admin_role(request, address: str):
 
 @router.post("/grant_role/")
 def grant_role(request, address: str, role: str):
-    """Grant a role (Admin, Issuer, Student) to an address."""
+    """Grant a role (Admin, Issuer) to an address."""
     try:
-        manager.connect_web3(settings.WEB3_PROVIDER_URI)
+        manager.connect_web3('http://ganache:8545')
         manager.load_abi()
         manager.load_address()
         manager.update_contract()
@@ -590,21 +604,12 @@ def grant_role(request, address: str, role: str):
             role_hash = Web3.keccak(text='DEFAULT_ADMIN_ROLE').hex()
         elif role == 'Issuer':
             role_hash = contract.functions.ISSUER_ROLE().call()
-        elif role == 'Student':
-            role_hash = Web3.keccak(text='STUDENT_ROLE').hex()
         else:
-            raise Exception("Invalid role")
-        admin_private_key = settings.ETH_ADMIN_PRIVATE_KEY
-        admin_address = settings.DJANGO_NINJA_ADMIN_ETH_ADDRESS
-        nonce = manager.web3.eth.get_transaction_count(Web3.to_checksum_address(admin_address))
-        txn = contract.functions.grantRole(role_hash, Web3.to_checksum_address(address)).build_transaction({
-            'from': Web3.to_checksum_address(admin_address),
-            'nonce': nonce,
-            'gas': 500000,
-            'gasPrice': manager.web3.to_wei('5', 'gwei'),
-        })
-        signed_txn = manager.web3.eth.account.sign_transaction(txn, private_key=admin_private_key)
-        tx_hash = manager.web3.eth.send_raw_transaction(signed_txn.rawTransaction)
+            raise Exception("Invalid role. Can only be 'Admin' or 'Issuer'.")
+
+        admin_address = manager.web3.eth.accounts[0]
+        tx_hash = contract.functions.grantRole(role_hash, Web3.to_checksum_address(address)).transact({'from': admin_address})
+
         return {"success": True, "tx_hash": tx_hash.hex()}
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -612,9 +617,9 @@ def grant_role(request, address: str, role: str):
 
 @router.post("/revoke_role/")
 def revoke_role(request, address: str, role: str):
-    """Revoke a role (Admin, Issuer, Student) from an address."""
+    """Revoke a role (Admin, Issuer) from an address."""
     try:
-        manager.connect_web3(settings.WEB3_PROVIDER_URI)
+        manager.connect_web3('http://ganache:8545')
         manager.load_abi()
         manager.load_address()
         manager.update_contract()
@@ -625,33 +630,77 @@ def revoke_role(request, address: str, role: str):
             role_hash = Web3.keccak(text='DEFAULT_ADMIN_ROLE').hex()
         elif role == 'Issuer':
             role_hash = contract.functions.ISSUER_ROLE().call()
-        elif role == 'Student':
-            role_hash = Web3.keccak(text='STUDENT_ROLE').hex()
         else:
-            raise Exception("Invalid role")
-        admin_private_key = settings.ETH_ADMIN_PRIVATE_KEY
-        admin_address = settings.DJANGO_NINJA_ADMIN_ETH_ADDRESS
-        nonce = manager.web3.eth.get_transaction_count(Web3.to_checksum_address(admin_address))
-        txn = contract.functions.revokeRole(role_hash, Web3.to_checksum_address(address)).build_transaction({
-            'from': Web3.to_checksum_address(admin_address),
-            'nonce': nonce,
-            'gas': 500000,
-            'gasPrice': manager.web3.to_wei('5', 'gwei'),
-        })
-        signed_txn = manager.web3.eth.account.sign_transaction(txn, private_key=admin_private_key)
-        tx_hash = manager.web3.eth.send_raw_transaction(signed_txn.rawTransaction)
+            raise Exception("Invalid role. Can only be 'Admin' or 'Issuer'.")
+
+        admin_address = manager.web3.eth.accounts[0]
+        tx_hash = contract.functions.revokeRole(role_hash, Web3.to_checksum_address(address)).transact({'from': admin_address})
+
         return {"success": True, "tx_hash": tx_hash.hex()}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 
-@router.post("/check_roles/", response={200: RolesResponse, 400: ErrorResponse})
-def check_roles(request, check_roles_request: CheckRolesRequest):
+@router.post("/grant_student_role/")
+def grant_student_role(request, payload: StudentRoleRequest):
+    """Grants the STUDENT_ROLE to a given address. Must be called by an account with ISSUER_ROLE."""
+    print(f"Received payload for grant_student_role: {request.body}")  # Debugging line
+    try:
+        manager.connect_web3('http://ganache:8545')
+        manager.load_abi()
+        manager.load_address()
+        manager.update_contract()
+        contract = manager.contract
+        if not contract:
+            return Response({"error": "Contract not loaded"}, status=400)
+
+        # Using the admin account which also has ISSUER_ROLE
+        issuer_address = manager.web3.eth.accounts[0]
+
+        # Check if the function exists on the contract
+        if not hasattr(contract.functions, 'grantStudentRole'):
+            return Response({"error": "grantStudentRole function not found on contract."}, status=400)
+
+        tx_hash = contract.functions.grantStudentRole(Web3.to_checksum_address(payload.address)).transact({'from': issuer_address})
+
+        # Wait for the transaction to be mined
+        receipt = manager.web3.eth.wait_for_transaction_receipt(tx_hash)
+
+        if receipt.status == 0:
+            # The transaction failed
+            return Response({"error": "Transaction to grant student role failed."}, status=400)
+
+        return {"success": True, "tx_hash": tx_hash.hex()}
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
+
+
+@router.post("/revoke_student_role/")
+def revoke_student_role(request, payload: StudentRoleRequest):
+    """Revokes the STUDENT_ROLE from a given address. Must be called by an account with ISSUER_ROLE."""
+    try:
+        manager.connect_web3('http://ganache:8545')
+        manager.load_abi()
+        manager.load_address()
+        manager.update_contract()
+        contract = manager.contract
+        if not contract:
+            raise Exception("Contract not loaded")
+
+        issuer_address = manager.web3.eth.accounts[0]
+        tx_hash = contract.functions.revokeStudentRole(Web3.to_checksum_address(payload.address)).transact({'from': issuer_address})
+
+        return {"success": True, "tx_hash": tx_hash.hex()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/check_roles/{address}", response={200: RolesResponse, 400: ErrorResponse})
+def check_roles(request, address: str):
     """Return all blockchain roles (Admin, Issuer, Student) for a given address."""
-    address = check_roles_request.address
     # Optionally, you can verify the signature here if needed
     try:
-        manager.connect_web3(settings.WEB3_PROVIDER_URI)
+        manager.connect_web3('http://ganache:8545')
         manager.load_abi()
         manager.load_address()
         manager.update_contract()
@@ -659,15 +708,24 @@ def check_roles(request, check_roles_request: CheckRolesRequest):
         if not contract:
             return Response({"error": "Contract not loaded"}, status=400)
         roles = []
+        # The DEFAULT_ADMIN_ROLE in OpenZeppelin's AccessControl is bytes32(0)
+        DEFAULT_ADMIN_ROLE = b'\x00' * 32
         # Check Admin
-        if contract.functions.hasRole(Web3.keccak(text='DEFAULT_ADMIN_ROLE').hex(), Web3.to_checksum_address(address)).call():
-            roles.append('Admin')
+        try:
+            if contract.functions.hasRole(DEFAULT_ADMIN_ROLE, Web3.to_checksum_address(address)).call():
+                roles.append('Admin')
+        except Exception:
+            pass # Ignore if role check fails
         # Check Issuer
-        if contract.functions.hasRole(contract.functions.ISSUER_ROLE().call(), Web3.to_checksum_address(address)).call():
-            roles.append('Issuer')
+        try:
+            issuer_role_hash = Web3.keccak(text='ISSUER_ROLE')
+            if contract.functions.hasRole(issuer_role_hash, Web3.to_checksum_address(address)).call():
+                roles.append('Issuer')
+        except Exception:
+            pass # Ignore if role check fails
         # Check Student (if implemented)
         try:
-            student_role_hash = Web3.keccak(text='STUDENT_ROLE').hex()
+            student_role_hash = Web3.keccak(text='STUDENT_ROLE')
             if contract.functions.hasRole(student_role_hash, Web3.to_checksum_address(address)).call():
                 roles.append('Student')
         except Exception:

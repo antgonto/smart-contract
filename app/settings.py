@@ -54,6 +54,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
+    "app.middleware.RequestLoggingMiddleware",
     "app.middleware.TraceIDMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -217,31 +218,45 @@ SIMPLE_JWT = {
 
 
 # --- Web3 and Contract Setup for Auto-Granting Admin Role ---
-CONTRACT_ABI_PATH = os.path.join(BASE_DIR, 'CertificateRegistry.abi')
-CONTRACT_ADDRESS = os.environ.get('CERTIFICATE_CONTRACT_ADDRESS')  # Set in env
-ADMIN_ETH_ADDRESS = os.environ.get('DJANGO_NINJA_ADMIN_ETH_ADDRESS')  # Set in env
-PRIVATE_KEY = os.environ.get('ETH_ADMIN_PRIVATE_KEY')  # Set in env
-WEB3_PROVIDER_URI = os.environ.get('WEB3_PROVIDER_URI', 'http://localhost:8545')
+# CONTRACT_ABI_PATH = os.path.join(BASE_DIR, 'CertificateRegistry.abi')
+# CONTRACT_ADDRESS = os.environ.get('CERTIFICATE_CONTRACT_ADDRESS')  # Set in env
+# ADMIN_ETH_ADDRESS = os.environ.get('DJANGO_NINJA_ADMIN_ETH_ADDRESS')  # Set in env
+# PRIVATE_KEY = os.environ.get('ETH_ADMIN_PRIVATE_KEY')  # Set in env
+# WEB3_PROVIDER_URI = os.environ.get('WEB3_PROVIDER_URI', 'http://localhost:8545')
 
-if CONTRACT_ADDRESS and ADMIN_ETH_ADDRESS and PRIVATE_KEY:
-    try:
-        w3 = Web3(Web3.HTTPProvider(WEB3_PROVIDER_URI))
-        with open(CONTRACT_ABI_PATH, 'r') as abi_file:
-            contract_abi = json.load(abi_file)
-        contract = w3.eth.contract(address=Web3.to_checksum_address(CONTRACT_ADDRESS), abi=contract_abi)
-        DEFAULT_ADMIN_ROLE = w3.keccak(text='DEFAULT_ADMIN_ROLE').hex()
-        # Check if admin already has the role
-        has_role = contract.functions.hasRole(DEFAULT_ADMIN_ROLE, Web3.to_checksum_address(ADMIN_ETH_ADDRESS)).call()
-        if not has_role:
-            nonce = w3.eth.get_transaction_count(Web3.to_checksum_address(ADMIN_ETH_ADDRESS))
-            txn = contract.functions.grantRole(DEFAULT_ADMIN_ROLE, Web3.to_checksum_address(ADMIN_ETH_ADDRESS)).build_transaction({
-                'from': Web3.to_checksum_address(ADMIN_ETH_ADDRESS),
-                'nonce': nonce,
-                'gas': 500000,
-                'gasPrice': w3.to_wei('5', 'gwei'),
-            })
-            signed_txn = w3.eth.account.sign_transaction(txn, private_key=PRIVATE_KEY)
-            tx_hash = w3.eth.send_raw_transaction(signed_txn.rawTransaction)
-            print(f"Granting DEFAULT_ADMIN_ROLE to {ADMIN_ETH_ADDRESS}, tx hash: {tx_hash.hex()}")
-    except Exception as e:
-        print(f"[ERROR] Could not auto-grant admin role: {e}")
+# if CONTRACT_ADDRESS and ADMIN_ETH_ADDRESS and PRIVATE_KEY:
+#     try:
+#         w3 = Web3(Web3.HTTPProvider(WEB3_PROVIDER_URI))
+#         with open(CONTRACT_ABI_PATH, 'r') as abi_file:
+#             contract_abi = json.load(abi_file)
+#         contract = w3.eth.contract(address=Web3.to_checksum_address(CONTRACT_ADDRESS), abi=contract_abi)
+#         DEFAULT_ADMIN_ROLE = w3.keccak(text='DEFAULT_ADMIN_ROLE').hex()
+#         # Check if admin already has the role
+#         has_role = contract.functions.hasRole(DEFAULT_ADMIN_ROLE, Web3.to_checksum_address(ADMIN_ETH_ADDRESS)).call()
+#         if not has_role:
+#             nonce = w3.eth.get_transaction_count(Web3.to_checksum_address(ADMIN_ETH_ADDRESS))
+#             txn = contract.functions.grantRole(DEFAULT_ADMIN_ROLE, Web3.to_checksum_address(ADMIN_ETH_ADDRESS)).build_transaction({
+#                 'from': Web3.to_checksum_address(ADMIN_ETH_ADDRESS),
+#                 'nonce': nonce,
+#                 'gas': 500000,
+#                 'gasPrice': w3.to_wei('5', 'gwei'),
+#             })
+#             signed_txn = w3.eth.account.sign_transaction(txn, private_key=PRIVATE_KEY)
+#             tx_hash = w3.eth.send_raw_transaction(signed_txn.rawTransaction)
+#             print(f"Granting DEFAULT_ADMIN_ROLE to {ADMIN_ETH_ADDRESS}, tx hash: {tx_hash.hex()}")
+#     except Exception as e:
+#         print(f"[ERROR] Could not auto-grant admin role: {e}")
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+}

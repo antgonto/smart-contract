@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.25;
 
-import "./AccessControl.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 
 contract CertificateRegistry is AccessControl {
     bytes32 public constant ISSUER_ROLE = keccak256("ISSUER_ROLE");
-    bytes32 public constant ADMIN_ROLE = DEFAULT_ADMIN_ROLE;
+    bytes32 public constant STUDENT_ROLE = keccak256("STUDENT_ROLE");
 
     struct Certificate {
         bytes32 certHash;
@@ -44,6 +44,11 @@ contract CertificateRegistry is AccessControl {
         certificates[certHash] = cert;
         certificatesByStudent[student].push(certHash);
 
+        // Grant the student role if they don't have it already
+        if (!hasRole(STUDENT_ROLE, student)) {
+            _grantRole(STUDENT_ROLE, student);
+        }
+
         emit CertificateRegistered(certHash, msg.sender, student, block.timestamp, ipfsCid);
     }
 
@@ -73,10 +78,10 @@ contract CertificateRegistry is AccessControl {
 
     // Returns the roles of an address (issuer, student, or both)
     function getRoles(address account) external view returns (string[] memory) {
-        string[] memory rolesTmp = new string[](2);
+        string[] memory rolesTmp = new string[](3); // Increased size to 3 for Admin, Issuer, Student
         uint count = 0;
 
-        if (hasRole(ADMIN_ROLE, account)) {
+        if (hasRole(DEFAULT_ADMIN_ROLE, account)) {
             rolesTmp[count] = "Admin";
             count++;
         }
@@ -84,10 +89,11 @@ contract CertificateRegistry is AccessControl {
             rolesTmp[count] = "Issuer";
             count++;
         }
-        if (certificatesByStudent[account].length > 0) {
+        if (hasRole(STUDENT_ROLE, account)) {
             rolesTmp[count] = "Student";
             count++;
         }
+
         string[] memory roles = new string[](count);
         for (uint i = 0; i < count; i++) {
             roles[i] = rolesTmp[i];
@@ -103,6 +109,14 @@ contract CertificateRegistry is AccessControl {
     // Add a function to allow admin to revoke ISSUER_ROLE from an address
     function revokeIssuerRole(address account) public onlyRole(DEFAULT_ADMIN_ROLE) {
         _revokeRole(ISSUER_ROLE, account);
+    }
+
+    function grantStudentRole(address account) public onlyRole(ISSUER_ROLE) {
+        _grantRole(STUDENT_ROLE, account);
+    }
+
+    function revokeStudentRole(address account) public onlyRole(ISSUER_ROLE) {
+        _revokeRole(STUDENT_ROLE, account);
     }
 
     function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {

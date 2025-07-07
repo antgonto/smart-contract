@@ -77,32 +77,57 @@ def login(request, login_data: LoginRequest):
 
     try:
         recovered_address = EthAccount.recover_message(message, signature=login_data.signature)
+        print(f"Recovered address: {recovered_address}")
         if recovered_address.lower() != address.lower():
+            print(f"Signature verification failed. Expected {address.lower()}, got {recovered_address.lower()}")
             return Response({"error": "Signature verification failed."}, status=401)
-    except Exception:
+    except Exception as e:
+        print(f"Error during signature recovery: {e}")
         return Response({"error": "Invalid signature format."}, status=400)
 
     # Signature is valid, proceed with login/user creation
+    print("Signature verified successfully.")
     cache.delete(f"auth_nonce_{address.lower()}")
 
-    user, created = CustomUser.objects.get_or_create(username=address.lower())
+    try:
+        # Block 1: User creation
+        try:
+            user, created = CustomUser.objects.get_or_create(username=address.lower())
+        except Exception as e:
+            print(f"Error in User creation: {e}")
+            raise e
 
-    # Ensure an account exists for the address and is linked to the user.
-    account, account_created = UserAccount.objects.get_or_create(
-        address=address,
-        defaults={'user': user, 'name': f"Account for {address[:6]}"}
-    )
+        # Block 2: Account creation/linking
+        try:
+            account, account_created = UserAccount.objects.get_or_create(
+                address=address,
+                defaults={'user': user, 'name': f"Account for {address[:6]}"}
+            )
+            if not account_created and not account.user:
+                account.user = user
+                account.save()
+        except Exception as e:
+            print(f"Error in Account creation/linking: {e}")
+            raise e
 
-    if not account_created and not account.user:
-        # If the account existed but wasn't linked to a user, link it now.
-        account.user = user
-        account.save()
+        # Block 3: Role fetching
+        try:
+            roles = list(AccountRole.objects.filter(account=account).values_list('role', flat=True))
+            roles = [role.capitalize() for role in roles]
+            if not roles:
+                roles.append("Student")
+        except Exception as e:
+            print(f"Error in role fetching: {e}")
+            raise e
 
-    # Fetch roles from AccountRole table
-    roles = list(AccountRole.objects.filter(account=account).values_list('role', flat=True))
-    print("Roles: ", roles)
-    # Fallback: if no roles, assign 'student' by default
-    if not roles:
-        roles.append("student")
-    tokens = get_tokens_for_user(user, roles)
-    return TokenResponse(access=tokens["access"], refresh=tokens["refresh"], roles=roles)
+        # Block 4: Token generation
+        try:
+            tokens = get_tokens_for_user(user, roles)
+            return TokenResponse(access=tokens["access"], refresh=tokens["refresh"], roles=roles)
+        except Exception as e:
+            print(f"Error in token generation: {e}")
+            raise e
+
+    except Exception as e:
+        print(f"Unhandled error in login endpoint: {e}")
+        return Response({"error": "An unexpected error occurred during login."}, status=500)

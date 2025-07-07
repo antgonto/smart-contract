@@ -37,6 +37,12 @@ def deploy_contract(_web3, sender_account, abi_file, bin_file, arg1):
     abi      = getFileContent(abi_file)
     bytecode = getFileContent(bin_file)
 
+    # Convert hex string to bytes for web3 compatibility
+    bytecode = bytecode.strip()
+    if bytecode.startswith('0x'):
+        bytecode = bytecode[2:]
+    bytecode = bytes.fromhex(bytecode)
+
     contract = _web3.eth.contract(abi=abi, bytecode=bytecode)
     if arg1 is None:
         tx_hash = contract.constructor().transact({ 'from': sender_account })

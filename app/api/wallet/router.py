@@ -11,7 +11,7 @@ from app.models import Account, Transaction, Wallet, CustomUser
 from django.db import transaction as db_transaction
 from app.models import AccountRole
 
-GANACHE_URL = os.getenv('GANACHE_URL', 'http://ganache:8545')
+GANACHE_URL = 'http://ganache:8545'
 GANACHE_PRIVATE_KEY = os.getenv('GANACHE_PRIVATE_KEY')  # Optional: can use the first Ganache account
 FUND_AMOUNT_ETHER = float(os.getenv('FUND_AMOUNT_ETHER', '1'))  # Default: 1 ETH
 
@@ -96,6 +96,7 @@ class WalletCreateRequest(BaseModel):
 class WalletCreateResponse(BaseModel):
     id: int
     name: str
+    address: str  # Add address field
     created_at: str
     roles: list[str]
 
@@ -241,6 +242,7 @@ def create_wallet(request, data: WalletCreateRequest):
     return WalletCreateResponse(
         id=wallet.id,
         name=wallet.name,
+        address=address,  # Return the address
         created_at=str(wallet.created_at),
         roles=roles
     )

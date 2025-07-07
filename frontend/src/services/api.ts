@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-    baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000/api',
+    baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
 });
 
 api.interceptors.request.use(
@@ -48,6 +48,23 @@ export const downloadCertificateOffchain = async (ipfsHash: string) => {
   const response = await api.get(`/app/v1/smartcontracts/smartcontract/download_offchain/${ipfsHash}`, {
     responseType: 'blob',
   });
+  return response.data;
+};
+
+export const checkRoles = async (address: string) => {
+  const response = await api.get(`/app/v1/smartcontracts/smartcontract/check_roles/${address}`);
+  return response.data;
+};
+
+export const grantStudentRole = async (data: { address: string }) => {
+  const response = await api.post('/app/v1/smartcontracts/smartcontract/grant_student_role/', data, {
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return response.data;
+};
+
+export const revokeStudentRole = async (data: { address: string }) => {
+  const response = await api.post('/app/v1/smartcontracts/smartcontract/revoke_student_role/', data);
   return response.data;
 };
 

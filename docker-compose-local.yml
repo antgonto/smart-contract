@@ -29,12 +29,6 @@ services:
     networks:
       - contract_network
     restart: unless-stopped
-    healthcheck:
-      test: curl --fail http://django:8000/app/v1/smartcontracts/docs || exit 1
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
 
   ganache:
     container_name: ganache
