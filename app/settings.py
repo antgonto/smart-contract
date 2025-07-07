@@ -12,6 +12,9 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 import os
 from pathlib import Path
+from datetime import timedelta
+import json
+from web3 import Web3
 
 from app.environment import SETTINGS
 
@@ -37,6 +40,8 @@ APPEND_SLASH = True
 
 INSTALLED_APPS = [
     "corsheaders",
+    "rest_framework",
+    "rest_framework_simplejwt",
     "ninja",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -49,6 +54,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
+    "app.middleware.RequestLoggingMiddleware",
+    "app.middleware.TraceIDMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -116,27 +123,12 @@ WSGI_APPLICATION = "app.wsgi.application"
 
 
 # Use Redis if environment variables are set in environment.py, otherwise fallback to local memory cache
-redis_password = getattr(SETTINGS, 'REDIS_PASSWORD', '')
-redis_port = getattr(SETTINGS, 'REDIS_PORT', '6379')
-
-# Only use Redis if both are set and not empty/blank, and only if not running in a build/migration context
-USE_REDIS_CACHE = redis_password and redis_port and not os.environ.get('DISABLE_REDIS_CACHE', '')
-
-if USE_REDIS_CACHE:
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.redis.RedisCache",
-            "LOCATION": f"redis://{redis_password}@redis:{redis_port}/1",
-            "TIMEOUT": 300,
-        }
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": "redis://default:redis@redis:6379/0",
     }
-else:
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-            "LOCATION": "unique-snowflake",
-        }
-    }
+}
 
 DATABASES = {
     "default": {
@@ -195,3 +187,76 @@ STATICFILES_DIRS = [
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": False,
+
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "VERIFYING_KEY": None,
+    "AUDIENCE": None,
+    "ISSUER": None,
+
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+    "TOKEN_TYPE_CLAIM": "token_type",
+
+    "JTI_CLAIM": "jti",
+
+    "SLIDING_TOKEN_REFRESH_EXP_CLAIM": "refresh_exp",
+    "SLIDING_TOKEN_LIFETIME": timedelta(minutes=5),
+    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
+}
+
+
+# --- Web3 and Contract Setup for Auto-Granting Admin Role ---
+# CONTRACT_ABI_PATH = os.path.join(BASE_DIR, 'CertificateRegistry.abi')
+# CONTRACT_ADDRESS = os.environ.get('CERTIFICATE_CONTRACT_ADDRESS')  # Set in env
+# ADMIN_ETH_ADDRESS = os.environ.get('DJANGO_NINJA_ADMIN_ETH_ADDRESS')  # Set in env
+# PRIVATE_KEY = os.environ.get('ETH_ADMIN_PRIVATE_KEY')  # Set in env
+# WEB3_PROVIDER_URI = os.environ.get('WEB3_PROVIDER_URI', 'http://localhost:8545')
+
+# if CONTRACT_ADDRESS and ADMIN_ETH_ADDRESS and PRIVATE_KEY:
+#     try:
+#         w3 = Web3(Web3.HTTPProvider(WEB3_PROVIDER_URI))
+#         with open(CONTRACT_ABI_PATH, 'r') as abi_file:
+#             contract_abi = json.load(abi_file)
+#         contract = w3.eth.contract(address=Web3.to_checksum_address(CONTRACT_ADDRESS), abi=contract_abi)
+#         DEFAULT_ADMIN_ROLE = w3.keccak(text='DEFAULT_ADMIN_ROLE').hex()
+#         # Check if admin already has the role
+#         has_role = contract.functions.hasRole(DEFAULT_ADMIN_ROLE, Web3.to_checksum_address(ADMIN_ETH_ADDRESS)).call()
+#         if not has_role:
+#             nonce = w3.eth.get_transaction_count(Web3.to_checksum_address(ADMIN_ETH_ADDRESS))
+#             txn = contract.functions.grantRole(DEFAULT_ADMIN_ROLE, Web3.to_checksum_address(ADMIN_ETH_ADDRESS)).build_transaction({
+#                 'from': Web3.to_checksum_address(ADMIN_ETH_ADDRESS),
+#                 'nonce': nonce,
+#                 'gas': 500000,
+#                 'gasPrice': w3.to_wei('5', 'gwei'),
+#             })
+#             signed_txn = w3.eth.account.sign_transaction(txn, private_key=PRIVATE_KEY)
+#             tx_hash = w3.eth.send_raw_transaction(signed_txn.rawTransaction)
+#             print(f"Granting DEFAULT_ADMIN_ROLE to {ADMIN_ETH_ADDRESS}, tx hash: {tx_hash.hex()}")
+#     except Exception as e:
+#         print(f"[ERROR] Could not auto-grant admin role: {e}")
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+}

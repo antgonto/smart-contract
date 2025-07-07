@@ -17,8 +17,14 @@ from app.api.smartcontract.contract_manager import ContractManager
 from django.http import HttpResponse
 from django.contrib.sessions.models import Session
 from django.utils import timezone
+from app.api.wallet.router import get_balance
+import traceback
+from django.conf import settings
+from ninja import Schema
+from ninja.responses import Response
+from typing import List
 
-router = Router()
+router = Router(tags=["smartcontract"])
 
 manager = ContractManager()
 manager.refresh()
@@ -36,9 +42,11 @@ class CertificateIn(BaseModel):
 class CertificateOut(BaseModel):
     cert_hash: str
     issuer: str
-    recipient: str
-    ipfs_hash: str
-    created: str
+    student: str
+    issued_at: int
+    ipfs_cid: str
+    is_revoked: bool
+    role: str
     gas_used: int | None = None
 
 
@@ -104,6 +112,29 @@ class DashboardMetrics(Schema):
     active_sessions: int
     total_gas_spent: int | None = None
     gas_balance: int | None = None
+    wallet_gas_balance: str | None = None
+
+
+class DashboardWalletBalanceRequest(Schema):
+    address: str
+    rpc_url: str
+
+
+class RolesResponse(Schema):
+    roles: List[str]
+
+
+class ErrorResponse(Schema):
+    error: str
+
+
+class CheckRolesRequest(BaseModel):
+    address: str
+    signature: str | None = None
+
+
+class StudentRoleRequest(BaseModel):
+    address: str
 
 
 @router.post("/register/", response=CertificateOut)
@@ -118,8 +149,6 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
     # 3. Extract metadata
     reader = PdfReader(file)
     metadata = reader.metadata
-    print(metadata)
-
     meta_dict = {
         "title": metadata.title,
         "author": metadata.author,
@@ -127,7 +156,6 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
         "producer": metadata.producer,
         "created": str(metadata.creation_date),
     }
-    print("meta_dict: ", meta_dict)
     # 4. Upload to IPFS (offchain) and get IPFS hash
     with ipfshttpclient.connect(IPFS_API_URL) as client:
         res = client.add_bytes(pdf_bytes)
@@ -141,49 +169,80 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
         tx_hash = contract.functions.registerCertificate(
             cert_hash_bytes,
             Web3.to_checksum_address(recipient),
-            ipfs_hash,  # Store IPFS hash as metadata
-            str(meta_dict),  # Optionally store metadata as content
+            ipfs_hash
         ).transact({"from": issuer})
-        # Get transaction receipt to fetch gas used
         receipt = manager.web3.eth.get_transaction_receipt(tx_hash)
         gas_used = receipt['gasUsed']
+        # Fetch all certificate details from the contract
+        cert_details = contract.functions.getCertificateWithRole(cert_hash_bytes).call()
+        # cert_details: (issuer, student, issuedAt, isRevoked, role)
+        return CertificateOut(
+            cert_hash=cert_hash,
+            issuer=cert_details[0],
+            student=cert_details[1],
+            issued_at=cert_details[2],
+            ipfs_cid=ipfs_hash,
+            is_revoked=cert_details[3],
+            role=cert_details[4],
+            gas_used=gas_used
+        )
     except Exception as e:
         from web3.exceptions import ContractLogicError
-        if isinstance(e, ContractLogicError) and "Certificate already exists" in str(e):
-            raise HttpError(409, "Certificate already exists for this hash.")
-        raise
-    return CertificateOut(
-        cert_hash=cert_hash,
-        issuer=issuer,
-        recipient=recipient,
-        ipfs_hash=ipfs_hash,  # Return IPFS hash as metadata
-        created=str(metadata.creation_date),
-        gas_used=gas_used
-    )
+        import logging
+        logging.error(f"Certificate registration failed: {e}")
+        if isinstance(e, ContractLogicError):
+            if "Certificate already exists" in str(e):
+                raise HttpError(409, "Certificate already exists for this hash.")
+            elif "revert" in str(e):
+                raise HttpError(400, f"Smart contract reverted: {str(e)}")
+        if "invalid address" in str(e).lower():
+            raise HttpError(400, f"Invalid Ethereum address: {recipient}")
+        # Add more detailed error for debugging
+        raise HttpError(500, f"Certificate registration failed: {str(e)}. Please check if the issuer has the correct role and the contract is deployed.")
 
 
 @router.post("/compile/", response=CompileResponse)
 def compile_contract(request):
+    print("Compiling contracts...")
     success_process = []
     output_process = []
+    # Ensure contracts directory exists (create parent dirs if needed)
+    if not os.path.exists(manager.contracts_dir):
+        os.makedirs(manager.contracts_dir, exist_ok=True)
+    print(f"Compiling contracts in directory: {manager.contracts_dir}")
     contract_files = [
         os.path.join(manager.contracts_dir, file_name)
         for file_name in sorted(os.listdir(manager.contracts_dir))
         if os.path.isfile(os.path.join(manager.contracts_dir, file_name)) and file_name.endswith(".sol")
     ]
+    print(f"Found contract files: {contract_files}")
     for file_name in contract_files:
         try:
             print(f"Compiling contract: {file_name}")
             result = run(
-                ["solc", "--overwrite", "--bin", "--abi", file_name, "-o", manager.contracts_dir],
+                [
+                    "solc",
+                    "--overwrite",
+                    "--bin",
+                    "--abi",
+                    file_name,
+                    "-o",
+                    manager.contracts_dir,
+                    "--base-path", "/opt/project",
+                    "--include-path", "/opt/project/node_modules",
+                    "--include-path", "/opt/project/contracts"
+                ],
                 capture_output=True,
                 text=True,
             )
-            print(result.stdout)
+            print(f"solc output for {file_name}:\n{result.stdout}\n{result.stderr}")
         except FileNotFoundError as e:
+            import traceback
+            tb = traceback.format_exc()
+            print(f"solc compiler not found. Traceback:\n{tb}")
             raise HttpError(
                 500,
-                "solc compiler not found. Please install solc and ensure it is in your PATH.",
+                "solc compiler not found. Please install solc and ensure it is in your PATH. Traceback: " + tb,
             ) from e
         success = result.returncode == 0
         output = result.stdout if success else result.stderr
@@ -196,40 +255,51 @@ def compile_contract(request):
 
 @router.post("/deploy/", response=DeployResponse)
 def deploy_contract(request):
+    manager.connect_web3()
+    if not manager.web3:
+        print("Deploying contracts...")
+        raise HttpError(500, "Web3 provider is not initialized. Cannot deploy contracts.")
     contract_files = [
         os.path.join(manager.contracts_dir, file_name)
         for file_name in sorted(os.listdir(manager.contracts_dir))
-        if os.path.isfile(os.path.join(manager.contracts_dir, file_name)) and (file_name.endswith(".abi") or file_name.endswith(".bin"))
+        if os.path.isfile(os.path.join(manager.contracts_dir, file_name)) and file_name.endswith(".sol")
     ]
+    print(manager.contracts_dir)
     deployed_contracts = []
     errors = []
     for file_name in contract_files:
+        base_filename = os.path.basename(file_name).rsplit(".", 1)[0]
+        abi_file = os.path.join(manager.contracts_dir, f"{base_filename}.abi")
+        bin_file = os.path.join(manager.contracts_dir, f"{base_filename}.bin")
+        # Only deploy if both ABI and BIN exist (i.e., contract has been compiled)
+        if not (os.path.exists(abi_file) and os.path.exists(bin_file)):
+            errors.append(f"Contract {base_filename} has not been compiled. Skipping deployment.")
+            continue
         try:
-            base_filename = file_name.split(".")[0]
-            abi_file = f"{base_filename}.abi"
-            bin_file = f"{base_filename}.bin"
+            # Use the first account for all deployments
+            sender_account = manager.web3.eth.accounts[0]
 
-            if not os.path.exists(abi_file) or not os.path.exists(bin_file):
-                raise Exception(f"ABI or BIN file missing for {base_filename}")
+            # Special handling for Lock.sol constructor argument
+            args = None
+            if base_filename == "Lock":
+                # Set unlockTime to 1 hour in the future
+                args = int(datetime.datetime.now(datetime.timezone.utc).timestamp()) + 3600
 
-            # Use the correct web3 instance and get accounts from it
-            sender_account = manager.web3.eth.accounts[1]
-            addr = SEEDWeb3.deploy_contract(manager.web3, sender_account, abi_file, bin_file, None)
+            addr = SEEDWeb3.deploy_contract(manager.web3, sender_account, abi_file, bin_file, args)
 
-            with open(f"{base_filename}.txt", "w") as fd:
+            addr_file_path = os.path.join(manager.contracts_dir, f"{base_filename}.txt")
+            with open(addr_file_path, "w") as fd:
                 fd.write(addr)
             deployed_contracts.append(f"Contract deployed successfully: {addr}")
-
         except Exception as e:
-            import traceback
             tb = traceback.format_exc()
             print(f"Error deploying {file_name}: {e}\n{tb}")
-            errors.append(f"failed processing contract file: {file_name}. Error: {e}")
-    if errors:
+            errors.append(f"failed processing contract file: {file_name}. Error: {e}. Traceback: {tb}")
+    if errors and not deployed_contracts:
         raise HttpError(500, " | ".join(errors))
     # Refresh contract manager state after deployment (address may have changed)
     manager.refresh()
-    return DeployResponse(success=[True], output=deployed_contracts)
+    return DeployResponse(success=[True]*len(deployed_contracts), output=deployed_contracts + errors)
 
 @router.post("/upload_offchain", response=CertificateResponse)
 def upload_certificate_offchain(request, file, payload):
@@ -276,6 +346,8 @@ def list_certificates(request):
     try:
         manager.refresh()
         contract = manager.get_contract()
+        if contract is None:
+            raise HttpError(500, f"Contract not loaded: {manager.get_error()}")
         events = contract.events.CertificateRegistered().get_logs(fromBlock=0)
         for event in events:
             cert_hash = event.args.certHash.hex()
@@ -308,6 +380,9 @@ def list_certificates(request):
             })
         return CertificateListResponse(certificates=certificates)
     except Exception as e:
+        import traceback
+        print('Exception in list_certificates:', e)
+        traceback.print_exc()
         raise HttpError(500, f"Failed to list certificates: {str(e)}") from e
 
 
@@ -487,3 +562,174 @@ def dashboard_metrics(request):
         total_gas_spent=total_gas_spent,
         gas_balance=gas_balance,
     )
+
+
+@router.post("/dashboard/wallet_gas_balance", response=DashboardMetrics)
+def dashboard_wallet_gas_balance(request, data: DashboardWalletBalanceRequest):
+    # Use the wallet balance endpoint logic
+    balance_response = get_balance(request, data)
+    return DashboardMetrics(wallet_gas_balance=balance_response.balance)
+
+
+@router.post("/check_admin_role/")
+def check_admin_role(request, address: str):
+    """Check if the given address has the Admin role (DEFAULT_ADMIN_ROLE) on the blockchain."""
+    try:
+        manager.connect_web3('ganache')
+        manager.load_abi()
+        manager.load_address()
+        manager.update_contract()
+        contract = manager.contract
+        if not contract:
+            raise Exception("Contract not loaded")
+        DEFAULT_ADMIN_ROLE = Web3.keccak(text='DEFAULT_ADMIN_ROLE').hex()
+        has_role = contract.functions.hasRole(DEFAULT_ADMIN_ROLE, Web3.to_checksum_address(address)).call()
+        return {"is_admin": has_role}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.post("/grant_role/")
+def grant_role(request, address: str, role: str):
+    """Grant a role (Admin, Issuer) to an address."""
+    try:
+        manager.connect_web3('http://ganache:8545')
+        manager.load_abi()
+        manager.load_address()
+        manager.update_contract()
+        contract = manager.contract
+        if not contract:
+            raise Exception("Contract not loaded")
+        if role == 'Admin':
+            role_hash = Web3.keccak(text='DEFAULT_ADMIN_ROLE').hex()
+        elif role == 'Issuer':
+            role_hash = contract.functions.ISSUER_ROLE().call()
+        else:
+            raise Exception("Invalid role. Can only be 'Admin' or 'Issuer'.")
+
+        admin_address = manager.web3.eth.accounts[0]
+        tx_hash = contract.functions.grantRole(role_hash, Web3.to_checksum_address(address)).transact({'from': admin_address})
+
+        return {"success": True, "tx_hash": tx_hash.hex()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/revoke_role/")
+def revoke_role(request, address: str, role: str):
+    """Revoke a role (Admin, Issuer) from an address."""
+    try:
+        manager.connect_web3('http://ganache:8545')
+        manager.load_abi()
+        manager.load_address()
+        manager.update_contract()
+        contract = manager.contract
+        if not contract:
+            raise Exception("Contract not loaded")
+        if role == 'Admin':
+            role_hash = Web3.keccak(text='DEFAULT_ADMIN_ROLE').hex()
+        elif role == 'Issuer':
+            role_hash = contract.functions.ISSUER_ROLE().call()
+        else:
+            raise Exception("Invalid role. Can only be 'Admin' or 'Issuer'.")
+
+        admin_address = manager.web3.eth.accounts[0]
+        tx_hash = contract.functions.revokeRole(role_hash, Web3.to_checksum_address(address)).transact({'from': admin_address})
+
+        return {"success": True, "tx_hash": tx_hash.hex()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/grant_student_role/")
+def grant_student_role(request, payload: StudentRoleRequest):
+    """Grants the STUDENT_ROLE to a given address. Must be called by an account with ISSUER_ROLE."""
+    print(f"Received payload for grant_student_role: {request.body}")  # Debugging line
+    try:
+        manager.connect_web3('http://ganache:8545')
+        manager.load_abi()
+        manager.load_address()
+        manager.update_contract()
+        contract = manager.contract
+        if not contract:
+            return Response({"error": "Contract not loaded"}, status=400)
+
+        # Using the admin account which also has ISSUER_ROLE
+        issuer_address = manager.web3.eth.accounts[0]
+
+        # Check if the function exists on the contract
+        if not hasattr(contract.functions, 'grantStudentRole'):
+            return Response({"error": "grantStudentRole function not found on contract."}, status=400)
+
+        tx_hash = contract.functions.grantStudentRole(Web3.to_checksum_address(payload.address)).transact({'from': issuer_address})
+
+        # Wait for the transaction to be mined
+        receipt = manager.web3.eth.wait_for_transaction_receipt(tx_hash)
+
+        if receipt.status == 0:
+            # The transaction failed
+            return Response({"error": "Transaction to grant student role failed."}, status=400)
+
+        return {"success": True, "tx_hash": tx_hash.hex()}
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
+
+
+@router.post("/revoke_student_role/")
+def revoke_student_role(request, payload: StudentRoleRequest):
+    """Revokes the STUDENT_ROLE from a given address. Must be called by an account with ISSUER_ROLE."""
+    try:
+        manager.connect_web3('http://ganache:8545')
+        manager.load_abi()
+        manager.load_address()
+        manager.update_contract()
+        contract = manager.contract
+        if not contract:
+            raise Exception("Contract not loaded")
+
+        issuer_address = manager.web3.eth.accounts[0]
+        tx_hash = contract.functions.revokeStudentRole(Web3.to_checksum_address(payload.address)).transact({'from': issuer_address})
+
+        return {"success": True, "tx_hash": tx_hash.hex()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/check_roles/{address}", response={200: RolesResponse, 400: ErrorResponse})
+def check_roles(request, address: str):
+    """Return all blockchain roles (Admin, Issuer, Student) for a given address."""
+    # Optionally, you can verify the signature here if needed
+    try:
+        manager.connect_web3('http://ganache:8545')
+        manager.load_abi()
+        manager.load_address()
+        manager.update_contract()
+        contract = manager.contract
+        if not contract:
+            return Response({"error": "Contract not loaded"}, status=400)
+        roles = []
+        # The DEFAULT_ADMIN_ROLE in OpenZeppelin's AccessControl is bytes32(0)
+        DEFAULT_ADMIN_ROLE = b'\x00' * 32
+        # Check Admin
+        try:
+            if contract.functions.hasRole(DEFAULT_ADMIN_ROLE, Web3.to_checksum_address(address)).call():
+                roles.append('Admin')
+        except Exception:
+            pass # Ignore if role check fails
+        # Check Issuer
+        try:
+            issuer_role_hash = Web3.keccak(text='ISSUER_ROLE')
+            if contract.functions.hasRole(issuer_role_hash, Web3.to_checksum_address(address)).call():
+                roles.append('Issuer')
+        except Exception:
+            pass # Ignore if role check fails
+        # Check Student (if implemented)
+        try:
+            student_role_hash = Web3.keccak(text='STUDENT_ROLE')
+            if contract.functions.hasRole(student_role_hash, Web3.to_checksum_address(address)).call():
+                roles.append('Student')
+        except Exception:
+            pass
+        return {"roles": roles}
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)

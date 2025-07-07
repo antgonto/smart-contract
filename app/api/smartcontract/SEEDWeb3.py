@@ -37,12 +37,20 @@ def deploy_contract(_web3, sender_account, abi_file, bin_file, arg1):
     abi      = getFileContent(abi_file)
     bytecode = getFileContent(bin_file)
 
+    # Convert hex string to bytes for web3 compatibility
+    bytecode = bytecode.strip()
+    if bytecode.startswith('0x'):
+        bytecode = bytecode[2:]
+    bytecode = bytes.fromhex(bytecode)
+
     contract = _web3.eth.contract(abi=abi, bytecode=bytecode)
-    tx_hash = contract.constructor(arg1).transact({ 'from': sender_account })
+    if arg1 is None:
+        tx_hash = contract.constructor().transact({ 'from': sender_account })
+    else:
+        tx_hash = contract.constructor(arg1).transact({ 'from': sender_account })
     print("... Waiting for block")
     tx_receipt = _web3.eth.wait_for_transaction_receipt(tx_hash)
     contract_address = tx_receipt.contractAddress
     print("Transaction Hash: {}".format(tx_receipt.transactionHash.hex()))
     print("Transaction Receipt: {}".format(tx_receipt))
     return contract_address
-

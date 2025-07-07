@@ -1,0 +1,148 @@
+services:
+  django:
+    container_name: django
+    build:
+      context: .
+      dockerfile: backend.Dockerfile
+    platform: linux/amd64
+    command: sh -c "python3 manage.py migrate && python3 -m daphne -b 0.0.0.0 app.asgi:application --port 8000"
+    env_file:
+      - ./.env
+    environment:
+      DJANGO_SECRET_KEY:      ${DJANGO_SECRET_KEY}
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE}
+      WEB3_RPC:               ${WEB3_RPC}
+      CHAIN_ID:               ${CHAIN_ID}
+      IPFS_API:               ${IPFS_API}
+      IPFS_4001_PORT:         4001
+    volumes:
+      - .:/code
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      ganache:
+        condition: service_healthy
+      ipfs:
+        condition: service_healthy
+    networks:
+      - contract_network
+    restart: unless-stopped
+    healthcheck:
+      test: curl --fail http://django:8000/app/v1/smartcontracts/docs || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  ganache:
+    container_name: ganache
+    build:
+      context: .
+      dockerfile: ganache.Dockerfile
+    platform: linux/amd64
+    command:
+      - --host=0.0.0.0
+      - --port=${GANACHE_PORT}
+      - --chain.chainId=${GANACHE_CHAIN_ID}
+      - --chain.networkId=${GANACHE_NETWORK_ID}
+      - --wallet.mnemonic=${GANACHE_MNEMONIC}
+      - --miner.defaultGasPrice=${GANACHE_GAS_PRICE}
+    env_file:
+      - ./.env
+    ports:
+      - "${GANACHE_PORT}:${GANACHE_PORT}"
+    healthcheck:
+      test: [
+        "CMD", "curl", "-X", "POST", "--data", "{\"jsonrpc\":\"2.0\",\"method\":\"web3_clientVersion\",\"params\":[],\"id\":1}", "http://localhost:8545"
+      ]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    networks:
+      - contract_network
+    restart: unless-stopped
+
+  ipfs:
+    container_name: ipfs
+    build:
+      context: .
+      dockerfile: ipfs.Dockerfile
+    env_file:
+      - ./.env
+    # The 'IPFS_API' environment variable is not directly used by the startup script,
+    # but is kept here in case other services depend on it.
+    environment:
+      IPFS_API: ${IPFS_API}
+    ports:
+      # Exposes the API port (5001) for internal/management access
+      - "5001:5001"
+      # Exposes the Gateway port (8080) for public web access
+      - "${IPFS_8080_PORT}:8080"
+      # Exposes the Swarm port (4001) for peer-to-peer communication
+      - "${IPFS_4001_PORT}:4001"
+    volumes:
+      # This volume persists the IPFS data
+      - ipfs_data:/data/ipfs
+      # This volume mounts your startup script into the container
+      - ./start_ipfs.sh:/usr/local/bin/start_ipfs.sh
+    # This command tells the container to run your startup script
+    command: ["start_ipfs.sh"]
+    networks:
+      - contract_network
+    restart: unless-stopped
+
+
+  redis:
+    container_name: redis
+    image: redis:8.0-M04-bookworm
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    env_file:
+      - ./.env
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - redis_data:/data
+    networks:
+      - contract_network
+    restart: unless-stopped
+
+  frontend:
+    container_name: frontend
+    build:
+      context: ./frontend
+      dockerfile: frontend/frontend.Dockerfile.prod
+    platform: linux/amd64
+    env_file:
+      - ./.env
+    environment:
+      REACT_APP_API_URL: ${REACT_APP_API_URL}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      django:
+        condition: service_healthy
+    networks:
+      - contract_network
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  ipfs_data:
+
+networks:
+  contract_network:
+    name: contract_network
+    driver: bridge

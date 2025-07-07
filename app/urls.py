@@ -6,8 +6,10 @@ from django.urls import path
 from django.conf import settings
 
 from app.api.api import api
+from app.api.auth.admin_login import admin_login
 
 urlpatterns = [
     path("app/v1/smartcontracts/", api.urls),
     path("admin/", admin.site.urls),
+    path("api/admin/login/", admin_login, name="admin_login"),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

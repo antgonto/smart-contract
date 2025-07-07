@@ -1,0 +1,3 @@
+address: 0x810Bf528249A6e8869a1593d4179C3fcB774e0E6
+private_key: c363a878b5c0ba51c1644210e102849ec15d73d707011e6243d7bb4684c36d40
+mnemonic: spatial legal mistake leisure steak supreme room hidden aware comfort credit comfort

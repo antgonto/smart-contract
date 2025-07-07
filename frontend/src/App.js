@@ -10,44 +10,53 @@ import {
 import '@elastic/eui/dist/eui_theme_amsterdam_light.json';
 import '@elastic/eui/dist/eui_theme_amsterdam_dark.json';
 
+import { AuthProvider } from './contexts/AuthContext';
 import Sidebar from './components/Sidebar';
-import Dashboard from './pages/Dashboard';
 import SettingsMenu from "./pages/SettingsMenu";
 import RegisterCertificate from "./pages/RegisterCertificate";
 import CertificatesList from "./pages/CertificatesList";
 import Wallet from './pages/Wallet';
+import { IssuerDashboard } from './pages/IssuerDashboard';
+import VerificationPortal from './components/VerificationPortal';
+import AdminDashboard from "./pages/AdminDashboard";
+import Dashboard from "./pages/Dashboard";
+import AllAccountsView from './pages/AllAccountsView';
+import CreateWalletView from './pages/CreateWalletView';
+import StudentDiplomas from './pages/StudentDiplomas';
 
 function App() {
   return (
-    <EuiProvider colorMode="dark">
-      <BrowserRouter>
-        <EuiPage style={{ height: '100vh' }}>
-          <EuiFlexGroup style={{ width: '100%', height: '100%' }} gutterSize="none">
-            <EuiFlexItem grow={false}>
-              <Sidebar />
-            </EuiFlexItem>
+    <AuthProvider>
+      <EuiProvider colorMode="dark">
+        <BrowserRouter>
+          <EuiPage style={{ height: '100vh' }}>
+            <EuiFlexGroup style={{ width: '100%', height: '100%' }} gutterSize="none">
+              <EuiFlexItem grow={false}>
+                <Sidebar />
+              </EuiFlexItem>
 
-            <EuiFlexItem>
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                {/*<Route path="/users" element={<UsersList />} />*/}
-                {/*<Route path="/assets" element={<AssetsList />} />*/}
-                {/*<Route path="/vulnerabilities" element={<VulnerabilityList />} />*/}
-                {/*<Route path="/alerts" element={<AlertsPage />} />*/}
-                {/*<Route path="/incidents" element={<IncidentsPage />} />*/}
-                {/*<Route path="/threat_intelligence" element={<ThreatIntelligenceList />} />*/}
-                <Route path="/wallet" element={<Wallet />} />
-                <Route path="/register-certificate" element={<RegisterCertificate />} />
-                <Route path="/settings" element={<SettingsMenu />} />
-                <Route path="/certificates" element={<CertificatesList />} />
-                <Route path="/wallet" element={<Wallet />} />
-                {/* Additional routes can be added here */}
-              </Routes>
-            </EuiFlexItem>
-          </EuiFlexGroup>
-        </EuiPage>
-      </BrowserRouter>
-    </EuiProvider>
+              <EuiFlexItem>
+                <Routes>
+                  <Route path="/" element={<></>} />
+                  <Route path="/metrics" element={<Dashboard />} />
+                  <Route path="/wallet" element={<Wallet />} />
+                  <Route path="/register-certificate" element={<RegisterCertificate />} />
+                  <Route path="/settings" element={<SettingsMenu />} />
+                  <Route path="/all-accounts" element={<AllAccountsView />} />
+                  <Route path="/certificates" element={<CertificatesList />} />
+                  <Route path="/issuer-dashboard" element={<IssuerDashboard />} />
+                  <Route path="/verify-certificate" element={<VerificationPortal />} />
+                  <Route path="/admin-dashboard" element={<AdminDashboard />} />
+                  <Route path="/create-wallet" element={<CreateWalletView />} />
+                  <Route path="/my-diplomas" element={<StudentDiplomas />} />
+                  {/* Additional routes can be added here */}
+                </Routes>
+              </EuiFlexItem>
+            </EuiFlexGroup>
+          </EuiPage>
+        </BrowserRouter>
+      </EuiProvider>
+    </AuthProvider>
   );
 }
 

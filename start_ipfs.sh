@@ -24,3 +24,4 @@ ipfs config Addresses.Gateway /ip4/0.0.0.0/tcp/8080
 echo "Starting IPFS daemon..."
 # Start the IPFS daemon. The 'exec' command replaces the shell process with the daemon.
 exec ipfs daemon
+

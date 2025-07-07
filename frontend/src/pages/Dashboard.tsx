@@ -15,8 +15,8 @@ import {
 } from '@elastic/eui';
 import {
   fetchDashboardMetrics,
-  fetchCertificates,
 } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 const tradeoffMetrics = [
   { key: 'gasCost', label: 'Gas Cost', onChain: 0.021, offChain: 0.002, unit: 'ETH' },
@@ -36,12 +36,13 @@ const logsColumns = [
 ];
 
 const Dashboard = () => {
+  const { isAuthenticated } = useAuth();
   const [metrics, setMetrics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [certificates, setCertificates] = useState<any[]>([]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     fetchDashboardMetrics()
       .then(data => {
         setMetrics(data);
@@ -51,13 +52,7 @@ const Dashboard = () => {
         setError('Failed to load dashboard metrics');
         setLoading(false);
       });
-    fetchCertificates()
-      .then((data) => {
-        setCertificates(data.certificates.map((item: any, idx: number) => ({ id: idx + 1, ...item })));
-        setLoading(false);
-      })
-      .catch(() => setCertificates([]));
-  }, []);
+  }, [isAuthenticated]);
 
   const systemStats = [
     { label: 'Revocations', value: metrics?.revocations ?? 0 },
@@ -82,6 +77,10 @@ const Dashboard = () => {
     { label: 'Verifiers', value: metrics?.verifiers ?? 0 },
   ];
 
+  if (!isAuthenticated) {
+    if (loading) setLoading(false);
+    return <EuiText><p>Please log in to view the dashboard.</p></EuiText>;
+  }
   if (loading) return <EuiText><p>Loading dashboard...</p></EuiText>;
   if (error) return <EuiText color="danger"><p>{error}</p></EuiText>;
 

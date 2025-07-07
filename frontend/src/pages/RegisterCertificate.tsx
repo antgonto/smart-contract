@@ -82,4 +82,3 @@ const RegisterCertificate = () => {
 };
 
 export default RegisterCertificate;
-
