@@ -91,7 +91,7 @@ def get_ganache_funder(w3):
 
 class WalletCreateRequest(BaseModel):
     name: str
-    role: str  # 'issuer' or 'student'
+    role: str = 'Student'  # 'issuer' or 'student'
 
 class WalletCreateResponse(BaseModel):
     id: int
