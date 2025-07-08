@@ -45,7 +45,6 @@ class CertificateOut(BaseModel):
     student: str
     issued_at: int
     ipfs_cid: str
-    is_revoked: bool
     role: str
     gas_used: int | None = None
 
@@ -144,24 +143,37 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
         raise HttpError(500, f"Contract not loaded: {manager.get_error()}")
     # 1. Read PDF bytes
     pdf_bytes = file.read()
+    file.seek(0)  # Reset pointer so PdfReader can read the file
     # 2. Calculate hash
     cert_hash = hashlib.sha256(pdf_bytes).hexdigest()
-    # 3. Extract metadata
-    reader = PdfReader(file)
-    metadata = reader.metadata
-    meta_dict = {
-        "title": metadata.title,
-        "author": metadata.author,
-        "subject": metadata.subject,
-        "producer": metadata.producer,
-        "created": str(metadata.creation_date),
-    }
+
     # 4. Upload to IPFS (offchain) and get IPFS hash
     with ipfshttpclient.connect(IPFS_API_URL) as client:
         res = client.add_bytes(pdf_bytes)
         ipfs_hash = res
+
+    # Log cert_hash, recipient, and ipfs_hash before contract call
+    print(f"cert_hash: {cert_hash} (length: {len(cert_hash)})")
+    cert_hash_bytes = bytes.fromhex(cert_hash[2:] if cert_hash.startswith('0x') else cert_hash)
+    print(f"cert_hash: {cert_hash} (length: {len(cert_hash)})")
+    print(f"cert_hash_bytes: {cert_hash_bytes} (length: {len(cert_hash_bytes)})")
+    print(f"recipient: {recipient}")
+    print(f"ipfs_hash: {ipfs_hash}")
+
     # 5. Register on blockchain, storing the IPFS hash as metadata
     issuer = manager.web3.eth.accounts[0]
+    print(f"Using issuer address: {issuer}")
+    # Check if issuer has ISSUER_ROLE
+    try:
+        contract_issuer_role = contract.functions.ISSUER_ROLE().call()
+        has_issuer_role = contract.functions.hasRole(contract_issuer_role, issuer).call()
+        print(f"Issuer has ISSUER_ROLE: {contract_issuer_role}")
+        if not has_issuer_role:
+            raise HttpError(403, f"Issuer {issuer} does not have ISSUER_ROLE.")
+    except Exception as e:
+        print(f"Error checking ISSUER_ROLE: {e}")
+        raise HttpError(500, f"Error checking ISSUER_ROLE: {e}")
+
     cert_hash_bytes = bytes.fromhex(cert_hash[2:] if cert_hash.startswith('0x') else cert_hash)
     if not (isinstance(recipient, str) and recipient.startswith('0x') and len(recipient) == 42):
         raise HttpError(400, f"Recipient must be a valid Ethereum address (got: {recipient})")
@@ -171,21 +183,14 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
             Web3.to_checksum_address(recipient),
             ipfs_hash
         ).transact({"from": issuer})
+        print(f"tx_hash: {tx_hash}")
         receipt = manager.web3.eth.get_transaction_receipt(tx_hash)
+        print(f"receipt: {receipt}")
         gas_used = receipt['gasUsed']
-        # Fetch all certificate details from the contract
-        cert_details = contract.functions.getCertificateWithRole(cert_hash_bytes).call()
-        # cert_details: (issuer, student, issuedAt, isRevoked, role)
-        return CertificateOut(
-            cert_hash=cert_hash,
-            issuer=cert_details[0],
-            student=cert_details[1],
-            issued_at=cert_details[2],
-            ipfs_cid=ipfs_hash,
-            is_revoked=cert_details[3],
-            role=cert_details[4],
-            gas_used=gas_used
-        )
+        print(f"gas_used: {gas_used}")
+        # Only call getCertificateWithRole if the transaction succeeded and status is 1
+        if receipt.get('status', 1) != 1:
+            raise HttpError(500, f"Certificate registration transaction failed (status={receipt.get('status')})")
     except Exception as e:
         from web3.exceptions import ContractLogicError
         import logging
@@ -198,7 +203,20 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
         if "invalid address" in str(e).lower():
             raise HttpError(400, f"Invalid Ethereum address: {recipient}")
         # Add more detailed error for debugging
-        raise HttpError(500, f"Certificate registration failed: {str(e)}. Please check if the issuer has the correct role and the contract is deployed.")
+        raise HttpError(500, f"Certificate registration failed: {str(e)}. ")
+
+    today = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    # Convert contract_issuer_role to hex string if it's bytes
+    role_str = contract_issuer_role.hex() if isinstance(contract_issuer_role, (bytes, bytearray)) else str(contract_issuer_role)
+    return CertificateOut(
+        cert_hash=cert_hash,
+        issuer=issuer,
+        student=recipient,
+        issued_at=today,
+        ipfs_cid=ipfs_hash,
+        role=role_str,
+        gas_used=gas_used
+    )
 
 
 @router.post("/compile/", response=CompileResponse)

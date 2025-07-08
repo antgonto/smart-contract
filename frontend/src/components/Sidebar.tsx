@@ -55,13 +55,6 @@ const Sidebar = () => {
       isSelected: location.pathname === '/my-diplomas',
       icon: <EuiIcon type="starEmpty" />,
     },
-    issuerDashboard: {
-      id: 'issuer-dashboard',
-      name: 'Issuer Dashboard',
-      onClick: () => navigate('/issuer-dashboard'),
-      isSelected: location.pathname === '/issuer-dashboard',
-      icon: <EuiIcon type="user" />,
-    },
     registerCertificate: {
       id: 'register-certificate',
       name: 'Register Certificate',
@@ -75,13 +68,6 @@ const Sidebar = () => {
       onClick: () => navigate('/certificates'),
       isSelected: location.pathname === '/certificates',
       icon: <EuiIcon type="indexOpen" />,
-    },
-    wallet: {
-      id: 'wallet',
-      name: 'Transactions',
-      onClick: () => navigate('/wallet'),
-      isSelected: location.pathname === '/wallet',
-      icon: <EuiIcon type="currency" />,
     },
     createWallet: {
         id: 'create-wallet',
@@ -117,10 +103,8 @@ const Sidebar = () => {
     } else if (roles.includes('Issuer')) {
       visibleItems = [
         navItems.telemetryDashboard,
-        navItems.wallet,
         navItems.registerCertificate,
         navItems.accounts,
-        navItems.issuerDashboard,
         navItems.createWallet,
         navItems.logout,
       ];
