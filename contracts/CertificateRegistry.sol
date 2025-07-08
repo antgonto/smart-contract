@@ -29,6 +29,8 @@ contract CertificateRegistry is AccessControl {
     }
 
     function registerCertificate(bytes32 certHash, address student, string calldata ipfsCid) external onlyRole(ISSUER_ROLE) {
+        require(student != address(0), "Invalid student address");
+        require(bytes(ipfsCid).length > 0, "Empty IPFS CID");
         require(certificates[certHash].issuedAt == 0, "Certificate already exists");
 
         Certificate memory cert = Certificate({

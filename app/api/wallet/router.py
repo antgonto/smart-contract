@@ -262,7 +262,6 @@ def create_wallet(request, data: WalletCreateRequest):
         wallet.delete()
         raise HttpError(500, f"Failed during wallet setup: {str(e)}")
 
-
     return WalletCreateResponse(
         id=wallet.id,
         name=wallet.name,
