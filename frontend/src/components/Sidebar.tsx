@@ -106,6 +106,13 @@ const Sidebar = () => {
         navItems.registerCertificate,
         navItems.accounts,
         navItems.createWallet,
+        {
+          id: 'issuer-certificates',
+          name: 'All Certificates',
+          onClick: () => navigate('/certificates'),
+          isSelected: location.pathname === '/certificates',
+          icon: <EuiIcon type="indexOpen" />,
+        },
         navItems.logout,
       ];
     }

@@ -160,7 +160,7 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
     print(f"recipient: {recipient}")
     print(f"ipfs_hash: {ipfs_hash}")
 
-    # 5. Register on blockchain, storing the IPFS hash as metadata
+    # 5. Register on blockchain, storing the IPFS hash as the metadata argument (for compatibility)
     issuer = manager.web3.eth.accounts[0]
     print(f"Using issuer address: {issuer}")
     # Check if issuer has ISSUER_ROLE
@@ -178,10 +178,11 @@ def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
     if not (isinstance(recipient, str) and recipient.startswith('0x') and len(recipient) == 42):
         raise HttpError(400, f"Recipient must be a valid Ethereum address (got: {recipient})")
     try:
+        # Pass ipfs_hash as the metadata argument for compatibility with event parsing
         tx_hash = contract.functions.registerCertificate(
             cert_hash_bytes,
             Web3.to_checksum_address(recipient),
-            ipfs_hash
+            ipfs_hash  # This is the metadata field in the event
         ).transact({"from": issuer})
         print(f"tx_hash: {tx_hash}")
         receipt = manager.web3.eth.get_transaction_receipt(tx_hash)
@@ -370,10 +371,10 @@ def list_certificates(request):
         for event in events:
             cert_hash = event.args.certHash.hex()
             issuer = getattr(event.args, 'issuer', None)
-            recipient = getattr(event.args, 'recipient', None)
-            metadata = getattr(event.args, 'metadata', None)
-            content = getattr(event.args, 'content', None)
-            ipfs_hash = metadata if isinstance(metadata, str) and len(metadata) >= 46 and metadata.startswith("Qm") else None
+            recipient = getattr(event.args, 'student', None)
+            ipfs_hash = getattr(event.args, 'ipfsCid', None)
+            metadata = ipfs_hash  # For compatibility with frontend/table
+            content = None
             block_number = getattr(event, 'blockNumber', None)
             transaction_hash = event.transactionHash.hex() if hasattr(event, 'transactionHash') else None
             log_index = getattr(event, 'logIndex', None)
@@ -388,6 +389,7 @@ def list_certificates(request):
                 "cert_hash": cert_hash,
                 "issuer": issuer,
                 "recipient": recipient,
+                "recipient_address": recipient,  # Add recipient address to the table
                 "metadata": metadata,
                 "content": content,
                 "ipfs_hash": ipfs_hash,
