@@ -1,0 +1,3 @@
+address: 0xe93025546Ab33F7AD922DA336B9E1c6Fb57DeB7a
+private_key: c869f4c423056dc573dff88edb654acc93e279d19c9c4847c6912a1b88fc2e9e
+mnemonic: hawk harvest vintage mutual rule vast ordinary lab black oppose elephant start
