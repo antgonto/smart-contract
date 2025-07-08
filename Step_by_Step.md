@@ -5,8 +5,8 @@ Below is a comprehensive, step‑by‑step tutorial to deploy the certificate‑
 ---
 
 python manage.py createsuperuser
-Username: admin
-Password: admin
+Username: issuer
+Password: issuer
 
 
 ## Prerequisites
@@ -407,9 +407,9 @@ To enable declarative, pull-based deployments using Argo CD:
 3. **Login**:
    ```bash
    # Retrieve initial password
-   kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+   kubectl -n argocd get secret argocd-initial-issuer-secret -o jsonpath="{.data.password}" | base64 -d
    # Login via CLI
-   argocd login <ARGOCD_SERVER> --username admin --password <PASSWORD>
+   argocd login <ARGOCD_SERVER> --username issuer --password <PASSWORD>
    ```
 4. **Create an Argo CD Application** pointing to your Git repo and `k8s/` path:
    ```yaml

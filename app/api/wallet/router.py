@@ -7,9 +7,11 @@ from pydantic import BaseModel
 from mnemonic import Mnemonic
 from web3.middleware import geth_poa_middleware
 import json
-from app.models import Account, Transaction, Wallet, CustomUser
+from app.models import Account, Transaction, Wallet
 from django.db import transaction as db_transaction
 from app.models import AccountRole
+
+
 
 GANACHE_URL = 'http://ganache:8545'
 GANACHE_PRIVATE_KEY = os.getenv('GANACHE_PRIVATE_KEY')  # Optional: can use the first Ganache account
@@ -91,7 +93,7 @@ def get_ganache_funder(w3):
 
 class WalletCreateRequest(BaseModel):
     name: str
-    role: str = 'Student'  # 'issuer' or 'student'
+    role: str # 'issuer' or 'student'
 
 class WalletCreateResponse(BaseModel):
     id: int
@@ -138,6 +140,7 @@ class WalletListItem(BaseModel):
     id: int
     name: str
     created_at: str
+    balance: str | None = None
 
 class AccountListItem(BaseModel):
     id: int
@@ -164,6 +167,7 @@ def get_certificate_registry_contract():
 
 @router.post("/create", response=WalletCreateResponse)
 def create_wallet(request, data: WalletCreateRequest):
+    roles = []
     user = request.user if hasattr(request, 'user') and request.user.is_authenticated else None
     # generate mnemonic and derive account
     generator = Mnemonic("english")
@@ -194,55 +198,75 @@ def create_wallet(request, data: WalletCreateRequest):
     funder_address, funder_private_key = get_ganache_funder(w3)
     if not funder_private_key:
         raise Exception('Funder private key not found. Set GANACHE_FUNDER_PRIVATE_KEY or provide a valid accounts.json.')
+
+    funder_account = w3.eth.account.from_key(funder_private_key)
+
     try:
-        tx = {
+        # Get the initial nonce for the funder account
+        current_nonce = w3.eth.get_transaction_count(funder_address)
+        # 1. Fund the new wallet
+        tx_fund = {
             'to': address,
             'value': w3.to_wei(FUND_AMOUNT_ETHER, 'ether'),
             'gas': 21000,
             'gasPrice': w3.to_wei('1', 'gwei'),
-            'nonce': w3.eth.get_transaction_count(funder_address),
+            'nonce': current_nonce,
         }
-        funder_account = w3.eth.account.from_key(funder_private_key)
-        signed_tx = funder_account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-        # Log the funding step for auditability
-        import logging
-        logging.info(f"Wallet funding: Sent {FUND_AMOUNT_ETHER} ETH from {funder_address} to {address}. Tx hash: {tx_hash.hex()}")
-    except Exception as e:
-        # Log the error and return a clear message
-        import logging
-        logging.error(f"Failed to fund wallet {address}: {e}")
-        from ninja.errors import HttpError
-        raise HttpError(500, f"Failed to fund wallet: {str(e)}")
+        signed_tx_fund = funder_account.sign_transaction(tx_fund)
+        tx_hash_fund = w3.eth.send_raw_transaction(signed_tx_fund.raw_transaction)
+        w3.eth.wait_for_transaction_receipt(tx_hash_fund)
 
-    # If the account is created with the Issuer role, grant ISSUER_ROLE on the smart contract
-    if data.role == "Issuer":
-        try:
-            abi, contract_address = get_certificate_registry_contract()
-            w3 = Web3(Web3.HTTPProvider(GANACHE_URL))
-            contract = w3.eth.contract(address=contract_address, abi=abi)
-            funder_address, funder_private_key = get_ganache_funder(w3)
-            admin_account = w3.eth.account.from_key(funder_private_key)
-            tx = contract.functions.grantIssuerRole(address).build_transaction({
+        import logging
+        logging.info(f"Wallet funding: Sent {FUND_AMOUNT_ETHER} ETH from {funder_address} to {address}. Tx hash: {tx_hash_fund.hex()}")
+        abi, contract_address = get_certificate_registry_contract()
+        contract_address = Web3.to_checksum_address(contract_address)
+        contract = w3.eth.contract(address=contract_address, abi=abi)
+
+        # 2. Grant the role on the smart contract
+        if data.role in ["Issuer", "Student"]:
+            if data.role == "Issuer":
+                role_grant_func = contract.functions.grantIssuerRole(address)
+            else:  # Student
+                role_grant_func = contract.functions.grantStudentRole(address)
+
+            # Increment nonce for the next transaction
+            current_nonce += 1
+
+            tx_role = role_grant_func.build_transaction({
                 'from': funder_address,
-                'nonce': w3.eth.get_transaction_count(funder_address),
+                'nonce': current_nonce,
                 'gas': 200000,
                 'gasPrice': w3.to_wei('1', 'gwei'),
             })
-            signed = admin_account.sign_transaction(tx)
-            w3.eth.send_raw_transaction(signed.raw_transaction)
-        except Exception as e:
-            import logging
-            logging.error(f"Failed to grant ISSUER_ROLE to {address}: {e}")
-    # Always load contract for role fetching
-    abi, contract_address = get_certificate_registry_contract()
-    w3 = Web3(Web3.HTTPProvider(GANACHE_URL))
-    contract = w3.eth.contract(address=contract_address, abi=abi)
-    roles = contract.functions.getRoles(address).call()
+            signed_tx_role = funder_account.sign_transaction(tx_role)
+            tx_hash_role = w3.eth.send_raw_transaction(signed_tx_role.raw_transaction)
+            w3.eth.wait_for_transaction_receipt(tx_hash_role)
+
+            # Use the funder address as the caller for the view call to avoid invalid opcode
+            funder_address, _ = get_ganache_funder(w3)
+            call_params = {'from': funder_address} if funder_address else {}
+            try:
+                roles = contract.functions.getRoles(address).call(call_params)
+            except Exception as e:
+                logging.error(f"Failed to fetch roles from contract for {address}: {e}")
+                roles = []
+
+            logging.info(f"Successfully granted {data.role.upper()}_ROLE to {address}. Tx: {tx_hash_role.hex()}")
+
+    except Exception as e:
+        import logging
+        logging.error(f"An error occurred during wallet creation and setup for {address}: {e}")
+        from ninja.errors import HttpError
+        # Clean up created records if setup fails
+        account.delete()
+        wallet.delete()
+        raise HttpError(500, f"Failed during wallet setup: {str(e)}")
+
+
     return WalletCreateResponse(
         id=wallet.id,
         name=wallet.name,
-        address=address,  # Return the address
+        address=address,
         created_at=str(wallet.created_at),
         roles=roles
     )
@@ -259,7 +283,7 @@ def list_wallets(request):
         balance = None
         if account:
             try:
-                balance = w3.from_wei(w3.eth.get_balance(account.address), 'ether')
+                balance = w3.from_wei(w3.eth.get_balance(Web3.to_checksum_address(account.address)), 'ether')
             except Exception:
                 balance = None
         wallet_items.append(WalletListItem(id=w.id, name=w.name, created_at=w.created_at.isoformat(), balance=str(balance) if balance is not None else None))
@@ -282,7 +306,8 @@ def import_wallet_private_key(request, data: WalletImportPrivateKeyRequest):
 def get_balance(request, data: WalletBalanceRequest):
     try:
         w3 = Web3(Web3.HTTPProvider(data.rpc_url, request_kwargs={'timeout': 30}))
-        balance = w3.eth.get_balance(data.address)
+        addr = Web3.to_checksum_address(data.address)
+        balance = w3.eth.get_balance(addr)
         return WalletBalanceResponse(address=data.address, balance=str(balance))
     except Exception as e:
         return WalletBalanceResponse(address=data.address, balance=f"Error: {str(e)}")
@@ -362,8 +387,6 @@ def get_account_roles(request, address: str):
     except Account.DoesNotExist:
         return []
 
-from django.forms.models import model_to_dict
-
 @router.get("/all-accounts", response=list[dict])
 def list_all_accounts(request):
     w3 = Web3(Web3.HTTPProvider(GANACHE_URL))
@@ -372,7 +395,7 @@ def list_all_accounts(request):
     for acc in accounts:
         # Get balance
         try:
-            balance = w3.eth.get_balance(acc.address)
+            balance = w3.eth.get_balance(Web3.to_checksum_address(acc.address))
         except Exception:
             balance = None
         # Get transactions

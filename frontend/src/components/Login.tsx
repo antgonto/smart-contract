@@ -8,7 +8,7 @@ import { ethers } from 'ethers';
 interface LoginProps {
     isOpen: boolean;
     onClose: () => void;
-    loginType: 'admin' | 'user';
+    loginType: 'issuer' | 'user';
 }
 
 export const Login: React.FC<LoginProps> = ({ isOpen, onClose, loginType }) => {
@@ -18,7 +18,7 @@ export const Login: React.FC<LoginProps> = ({ isOpen, onClose, loginType }) => {
     const [nonce, setNonce] = useState('');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const { login, adminLogin } = useAuth();
+    const { login, issuerLogin } = useAuth();
     const navigate = useNavigate();
 
     // Reset state when modal is closed or login type changes
@@ -37,21 +37,21 @@ export const Login: React.FC<LoginProps> = ({ isOpen, onClose, loginType }) => {
         setError(null);
         setNonce('');
         try {
-            const challengeResponse = await api.get(`/app/v1/smartcontracts/auth/challenge/${address.split(' ')[0]}`);
+            const challengeResponse = await api.get(`/app/v1/smartcontracts/auth/challenge/${address}`);
             setNonce(challengeResponse.data.nonce);
         } catch (err: any) {
             setError(err.response?.data?.error || 'Failed to get challenge.');
         }
     };
 
-    const handleAdminLogin = async () => {
+    const handleIssuerLogin = async () => {
         setError(null);
         try {
-            await adminLogin(username, password);
+            await issuerLogin(username, password);
             onClose();
             navigate('/');
         } catch (err: any) {
-            setError(err.response?.data?.error || 'Failed to login as admin.');
+            setError(err.response?.data?.error || 'Failed to login as issuer.');
         }
     };
 
@@ -66,12 +66,12 @@ export const Login: React.FC<LoginProps> = ({ isOpen, onClose, loginType }) => {
             const wallet = new ethers.Wallet(privateKey);
             const signature = await wallet.signMessage(nonce);
             const loginResponse = await api.post('/app/v1/smartcontracts/auth/login', {
-                address: address.split(' ')[0],
+                address: address,
                 signature, // Send the signature, not the private key
             });
             const { access, refresh } = loginResponse.data;
             // Blockchain role verification
-            const rolesResponse = await checkRoles(address.split(' ')[0]);
+            const rolesResponse = await checkRoles(address);
             const roles = rolesResponse.roles || [];
             if (roles.length === 0) {
                 setError('No blockchain role assigned to this address.');
@@ -90,11 +90,11 @@ export const Login: React.FC<LoginProps> = ({ isOpen, onClose, loginType }) => {
     return (
         <EuiModal onClose={onClose} initialFocus="[name=popswitch]">
             <EuiModalHeader>
-                <EuiText><h1>{loginType === 'admin' ? 'Admin Login' : 'User Login'}</h1></EuiText>
+                <EuiText><h1>{loginType === 'issuer' ? 'Issuer Login' : 'User Login'}</h1></EuiText>
             </EuiModalHeader>
 
             <EuiModalBody>
-                {loginType === 'admin' ? (
+                {loginType === 'issuer' ? (
                     <>
                         <EuiFieldText
                             placeholder="Username"
@@ -146,7 +146,7 @@ export const Login: React.FC<LoginProps> = ({ isOpen, onClose, loginType }) => {
                 <EuiButton onClick={onClose} color="text">
                     Cancel
                 </EuiButton>
-                <EuiButton onClick={loginType === 'admin' ? handleAdminLogin : handleLogin} fill disabled={loginType === 'user' && !privateKey}>
+                <EuiButton onClick={loginType === 'issuer' ? handleIssuerLogin : handleLogin} fill disabled={loginType === 'user' && !privateKey}>
                     Login
                 </EuiButton>
             </EuiModalFooter>
