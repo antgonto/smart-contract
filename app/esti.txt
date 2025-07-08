@@ -1,0 +1,3 @@
+address: 0x759cFa56Bc3B294C7EBaE69333BF83Bf43D585e3
+private_key: 50775f157c56d0d95e0f8d548c7094bd55a73545ae44d35b404f79ed78eea773
+mnemonic: lyrics loop middle napkin upper oppose system uphold rate actor update humble

@@ -42,6 +42,11 @@ const certificateColumns = [
   { field: 'block_number', name: 'Block Number', width: '7%' },
   { field: 'cert_hash', name: 'On-chain Certificate Hash', width: '35%' },
   { field: 'ipfs_hash', name: 'Off-chain Certificate Hash', width: '30%'},
+  {
+    name: 'Recipient Address',
+    width: '20%',
+    render: (item: any) => (item && (item.recipient_address || item.recipient || item.student)) || '-',
+  },
   { field: 'gas_used', name: 'Gas Used', width: '6%' },
   { field: 'cumulative_gas', name: 'Cumulative Gas', width: '10%' },
   {
