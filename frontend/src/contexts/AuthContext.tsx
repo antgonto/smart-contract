@@ -15,7 +15,7 @@ interface AuthState {
 interface AuthContextType extends AuthState {
     login: (token: string, roles: string[]) => void;
     logout: () => void;
-    adminLogin: (username: string, password: string) => Promise<void>;
+    issuerLogin: (username: string, password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,17 +26,8 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
-    const [roles, setRoles] = useState<string[]>(() => {
-        const stored = localStorage.getItem('roles');
-        if (!stored || stored === 'undefined') return [];
-        try {
-            const parsed = JSON.parse(stored);
-            return Array.isArray(parsed) ? parsed : [];
-        } catch {
-            return [];
-        }
-    });
-    const [isAdmin, setIsAdmin] = useState<boolean>(() => !!localStorage.getItem('isAdmin'));
+    const [roles, setRoles] = useState<string[]>([]);
+    const [isIssuer, setIsIssuer] = useState<boolean>(() => !!localStorage.getItem('isIssuer'));
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
@@ -46,49 +37,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.setItem('roles', JSON.stringify(newRoles));
         setToken(newToken);
         setRoles(newRoles);
-        setIsAdmin(newRoles.includes('Admin'));
-        if (newRoles.includes('Admin')) {
-            localStorage.setItem('isAdmin', 'true');
+        setIsIssuer(newRoles.includes('Issuer'));
+        if (newRoles.includes('Issuer')) {
+            localStorage.setItem('isIssuer', 'true');
         } else {
-            localStorage.removeItem('isAdmin');
+            localStorage.removeItem('isIssuer');
         }
     };
 
     const logout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('roles');
-        localStorage.removeItem('isAdmin');
+        localStorage.removeItem('isIssuer');
         setToken(null);
         setRoles([]);
-        setIsAdmin(false);
+        setIsIssuer(false);
     };
 
-    const adminLogin = async (username: string, password: string) => {
+    const issuerLogin = async (username: string, password: string) => {
         setLoading(true);
         setError(null);
         setSuccess(null);
         try {
-            const res = await api.post('/admin/login/', { username, password });
+            const res = await api.post('/issuer/login/', { username, password });
             const { token, roles } = res.data;
-            login(token, roles.includes('Admin') ? ['Admin'] : roles);
-            setSuccess('Admin login successful');
+            login(token, roles.includes('Issuer') ? ['Issuer'] : roles);
+            setSuccess('Issuer login successful');
         } catch (err: any) {
-            setError(err.response?.data?.error || 'Admin login failed');
+            setError(err.response?.data?.error || 'Issuer login failed');
         } finally {
             setLoading(false);
         }
     };
 
-    // Compute address, isAuthenticated based on admin or token
+    // Compute address, isAuthenticated based on issuer or token
     let address = null;
     let isAuthenticated = false;
-    if (isAdmin) {
+    if (isIssuer) {
         isAuthenticated = true;
     } else if (token) {
         try {
             const decoded = jwtDecode<{ address: string; roles: string[]; exp: number }>(token);
             if (decoded.exp * 1000 > Date.now()) {
                 address = decoded.address;
+                // If roles in state are empty, populate them from the token.
+                if (roles.length === 0 && decoded.roles) {
+                    setRoles(decoded.roles);
+                }
                 isAuthenticated = true;
             }
         } catch (e) {
@@ -98,14 +93,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const contextValue: AuthContextType = {
         token,
         address,
-        roles: isAdmin ? ['admin'] : roles,
+        roles: isIssuer ? ['Issuer'] : roles,
         isAuthenticated,
         loading,
         error,
         success,
         login,
         logout,
-        adminLogin,
+        issuerLogin,
     };
     return (
         <AuthContext.Provider value={contextValue}>

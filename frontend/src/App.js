@@ -16,9 +16,8 @@ import SettingsMenu from "./pages/SettingsMenu";
 import RegisterCertificate from "./pages/RegisterCertificate";
 import CertificatesList from "./pages/CertificatesList";
 import Wallet from './pages/Wallet';
-import { IssuerDashboard } from './pages/IssuerDashboard';
+import IssuerDashboard from './pages/IssuerDashboard';
 import VerificationPortal from './components/VerificationPortal';
-import AdminDashboard from "./pages/AdminDashboard";
 import Dashboard from "./pages/Dashboard";
 import AllAccountsView from './pages/AllAccountsView';
 import CreateWalletView from './pages/CreateWalletView';
@@ -44,9 +43,8 @@ function App() {
                   <Route path="/settings" element={<SettingsMenu />} />
                   <Route path="/all-accounts" element={<AllAccountsView />} />
                   <Route path="/certificates" element={<CertificatesList />} />
-                  <Route path="/issuer-dashboard" element={<IssuerDashboard />} />
                   <Route path="/verify-certificate" element={<VerificationPortal />} />
-                  <Route path="/admin-dashboard" element={<AdminDashboard />} />
+                  <Route path="/issuer-dashboard" element={<IssuerDashboard />} />
                   <Route path="/create-wallet" element={<CreateWalletView />} />
                   <Route path="/my-diplomas" element={<StudentDiplomas />} />
                   {/* Additional routes can be added here */}

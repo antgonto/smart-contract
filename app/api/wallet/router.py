@@ -91,7 +91,7 @@ def get_ganache_funder(w3):
 
 class WalletCreateRequest(BaseModel):
     name: str
-    role: str = 'Student'  # 'issuer' or 'student'
+    role: str # 'issuer' or 'student'
 
 class WalletCreateResponse(BaseModel):
     id: int
@@ -230,10 +230,38 @@ def create_wallet(request, data: WalletCreateRequest):
                 'gasPrice': w3.to_wei('1', 'gwei'),
             })
             signed = admin_account.sign_transaction(tx)
-            w3.eth.send_raw_transaction(signed.raw_transaction)
+            tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+            w3.eth.wait_for_transaction_receipt(tx_hash)
         except Exception as e:
             import logging
             logging.error(f"Failed to grant ISSUER_ROLE to {address}: {e}")
+
+    # If the account is created with the Student role, grant STUDENT_ROLE on the smart contract
+    if data.role == "Student":
+        try:
+            abi, contract_address = get_certificate_registry_contract()
+            w3 = Web3(Web3.HTTPProvider(GANACHE_URL))
+            contract = w3.eth.contract(address=contract_address, abi=abi)
+            # The funder account is the admin and has the ISSUER_ROLE required to grant student roles
+            funder_address, funder_private_key = get_ganache_funder(w3)
+            admin_account = w3.eth.account.from_key(funder_private_key)
+
+            # Use a new nonce for this transaction
+            nonce = w3.eth.get_transaction_count(funder_address)
+
+            tx = contract.functions.grantStudentRole(address).build_transaction({
+                'from': funder_address,
+                'nonce': nonce,
+                'gas': 200000,
+                'gasPrice': w3.to_wei('1', 'gwei'),
+            })
+            signed = admin_account.sign_transaction(tx)
+            tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+            w3.eth.wait_for_transaction_receipt(tx_hash)
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to grant STUDENT_ROLE to {address}: {e}")
+
     # Always load contract for role fetching
     abi, contract_address = get_certificate_registry_contract()
     w3 = Web3(Web3.HTTPProvider(GANACHE_URL))

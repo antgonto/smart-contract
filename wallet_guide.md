@@ -33,5 +33,4 @@ You can import a wallet in two ways:
 
 ---
 
-If you need to interact with smart contracts or sign transactions, additional features may be available in other sections of the app. For further help, contact your project administrator.
-
+If you need to interact with smart contracts or sign transactions, additional features may be available in other sections of the app. For further help, contact your project issuer.
