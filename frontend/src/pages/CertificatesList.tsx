@@ -111,13 +111,6 @@ const CertificatesList  = () => {
       </EuiPageHeader>
       <EuiPageTemplate>
         <EuiSpacer size="l" />
-        {/* Recent Operations Table */}
-        <EuiPanel paddingSize="l">
-          <EuiTitle size="s"><h2>Recent Operations</h2></EuiTitle>
-          <EuiSpacer size="m" />
-          <EuiBasicTable items={recentOpsWithCumulative} columns={recentOpsColumns} />
-        </EuiPanel>
-        <EuiSpacer size="l" />
         {/* Certificates Table */}
         <EuiPanel paddingSize="l">
           <EuiTitle size="s"><h2>Certificates</h2></EuiTitle>
