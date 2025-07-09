@@ -83,12 +83,17 @@ export const fetchStudentDiplomas = async (studentAddress: string) => {
   const response = await api.get('/app/v1/smartcontracts/student/certificates', {
     params: { student_address: studentAddress },
   });
+  console.log("Response", response)
+  // Accept both response.data.certificates and response.data (array)
+  const items = Array.isArray(response.data)
+    ? response.data
+    : (response.data.certificates || []);
   // Map backend fields to expected frontend fields (including issue_date)
-  return (response.data.certificates || []).map((item: any, idx: number) => ({
+  return items.map((item: any, idx: number) => ({
     id: idx + 1,
-    cert_hash: item.cert_hash,
+    cert_hash: item.cert_hash || item.hash,
     ipfs_hash: item.ipfs_hash,
-    issue_date: item.block_number, // or use another field if available
+    issue_date: item.issue_date || item.timestamp || item.block_number,
     ...item,
   }));
 };

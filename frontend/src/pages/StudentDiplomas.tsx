@@ -66,6 +66,7 @@ const StudentDiplomas = () => {
         console.log("Address: ", data)
         if (data.address) {
           const diplomasData = await fetchStudentDiplomas(data.address);
+          console.log(diplomasData)
           setDiplomas(diplomasData);
         } else {
           setError('No logged address found.');
