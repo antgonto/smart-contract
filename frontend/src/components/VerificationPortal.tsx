@@ -33,9 +33,8 @@ const VerificationPortal = () => {
         setVerificationResult(null);
 
         try {
-            const response = await axios.post(`/api/public/verify/${certificateHash}`, {
-                recaptchaToken: recaptchaToken
-            });
+            // Use GET for public verification endpoint
+            const response = await axios.get(`/app/v1/smartcontracts/smartcontract/verify_certificate/${certificateHash}`);
             setVerificationResult(response.data);
         } catch (err) {
             setError('An error occurred while verifying the certificate.');
@@ -80,16 +79,44 @@ const VerificationPortal = () => {
                     <EuiSpacer size="m" />
                     {error && <EuiCallOut color="danger" title="Error">{error}</EuiCallOut>}
                     {verificationResult && (
-                        <EuiCallOut color={verificationResult.is_valid ? 'success' : 'danger'} title="Verification Result">
-                            <p>Is Valid: {verificationResult.is_valid ? 'Yes' : 'No'}</p>
-                            <p>Is Revoked: {verificationResult.is_revoked ? 'Yes' : 'No'}</p>
-                            {verificationResult.is_valid && (
+                        <>
+                            <EuiSpacer size="m" />
+                            {verificationResult.error ? (
+                                <EuiCallOut color="danger" title="Verification Failed">{verificationResult.error}</EuiCallOut>
+                            ) : (
                                 <>
-                                    <p>Issuer: {verificationResult.issuer}</p>
-                                    <p>Student: {verificationResult.student}</p>
+                                    <EuiCallOut color="success" title="Certificate Found">
+                                        <div><b>Issuer:</b> {verificationResult.issuer}</div>
+                                        <div><b>Student:</b> {verificationResult.student}</div>
+                                        <div><b>Timestamp:</b> {verificationResult.timestamp ? new Date(verificationResult.timestamp * 1000).toLocaleString() : '-'}</div>
+                                        <div><b>Revoked:</b> {verificationResult.is_revoked ? 'Yes' : 'No'}</div>
+                                        <div><b>IPFS CID:</b> {verificationResult.ipfs_hash || '-'}</div>
+                                    </EuiCallOut>
+                                    {verificationResult.ipfs_hash && (
+                                        <>
+                                            <EuiSpacer size="m" />
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        const res = await axios.get(`/app/v1/smartcontracts/smartcontract/download_offchain/${verificationResult.ipfs_hash}`, { responseType: 'blob' });
+                                                        const url = window.URL.createObjectURL(res.data);
+                                                        const link = document.createElement('a');
+                                                        link.href = url;
+                                                        link.setAttribute('download', `${verificationResult.ipfs_hash}.pdf`);
+                                                        document.body.appendChild(link);
+                                                        link.click();
+                                                        link.parentNode?.removeChild(link);
+                                                        window.URL.revokeObjectURL(url);
+                                                    } catch (e) {
+                                                        alert('Failed to download diploma.');
+                                                    }
+                                                }}
+                                            >Download PDF</button>
+                                        </>
+                                    )}
                                 </>
                             )}
-                        </EuiCallOut>
+                        </>
                     )}
                 </EuiCard>
             </EuiPageBody>
