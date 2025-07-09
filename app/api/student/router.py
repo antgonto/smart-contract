@@ -22,6 +22,7 @@ class CertificateDetails(BaseModel):
     student: str
     timestamp: int
     is_revoked: bool
+    ipfs_hash: str
 
 class ErrorSchema(BaseModel):
     error: str
@@ -40,27 +41,29 @@ class StudentTokenResponse(BaseModel):
 def get_my_certificates(request, student_address: str):
     contract = manager.get_contract()
     try:
-        certificate_hashes = contract.functions.getCertificatesByStudent(student_address).call()
-
+        # Use the event logs to get all certificates, then filter by student_address
+        events = contract.events.CertificateRegistered().get_logs(fromBlock=0)
         certificates = []
-        for cert_hash_bytes in certificate_hashes:
-            cert_hash_hex = "0x" + cert_hash_bytes.hex()
-            cert_data = contract.functions.getCertificate(cert_hash_bytes).call()
-            # cert_data is a tuple: (issuer, student, timestamp, isRevoked)
-            issuer, student, timestamp, is_revoked = cert_data
-
-            certificates.append(
-                CertificateDetails(
-                    hash=cert_hash_hex,
-                    issuer=issuer,
-                    student=student,
-                    timestamp=timestamp,
-                    is_revoked=is_revoked
+        for event in events:
+            cert_hash = event.args.certHash.hex()
+            issuer = getattr(event.args, 'issuer', None)
+            student = getattr(event.args, 'student', None)
+            ipfs_hash = getattr(event.args, 'ipfsCid', None)
+            timestamp = getattr(event.args, 'issuedAt', None)
+            is_revoked = False  # You may want to check for revocation events if needed
+            if student and student.lower() == student_address.lower():
+                certificates.append(
+                    CertificateDetails(
+                        hash=cert_hash,
+                        issuer=issuer,
+                        student=student,
+                        timestamp=timestamp if timestamp is not None else 0,
+                        is_revoked=is_revoked,
+                        ipfs_hash=ipfs_hash or ""
+                    )
                 )
-            )
         return certificates
     except Exception as e:
-        # In a real app, you'd want to log this error.
         print(f"Error fetching certificates for {student_address}: {e}")
         return 500, {"error": "Could not retrieve certificates from the blockchain."}
 

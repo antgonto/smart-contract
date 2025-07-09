@@ -14,10 +14,10 @@ import { useAuth } from '../contexts/AuthContext';
 const diplomaColumns = [
   { field: 'id', name: 'ID', width: '5%' },
   { field: 'cert_hash', name: 'On-chain Certificate Hash', width: '35%' },
-  { field: 'ipfs_hash', name: 'IPFS CID', width: '35%' },
+  { field: 'ipfs_hash', name: 'Off-chain Certificate Hash', width: '35%' },
   { field: 'issue_date', name: 'Issue Date', width: '15%',
-    render: (item: any) => (
-      item.issue_date ? new Date(item.issue_date * 1000).toLocaleDateString() : '-' // assuming issue_date is a unix timestamp
+    render: (value: any) => (
+      value ? new Date(value * 1000).toLocaleDateString() : '-'
     )
   },
   {

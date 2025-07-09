@@ -348,15 +348,24 @@ def upload_certificate_offchain(request, file, payload):
 #
 @router.get("/download_offchain/{ipfs_hash}")
 def download_certificate_offchain(request, ipfs_hash: str):
+    import ipfshttpclient
+    from django.http import FileResponse, HttpResponse
+    import tempfile
     try:
-        with ipfshttpclient.connect(IPFS_API_URL) as client:
-            data = client.cat(ipfs_hash)
-        # Return as a file response
-        response = HttpResponse(data, content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{ipfs_hash}.pdf"'
-        return response
+        # Connect to local or remote IPFS node
+        client = ipfshttpclient.connect(IPFS_API_URL)
+        # Download the file from IPFS
+        file_bytes = client.cat(ipfs_hash)
+        # Write to a temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+            tmp_file.write(file_bytes)
+            tmp_file.flush()
+            tmp_file.seek(0)
+            response = FileResponse(open(tmp_file.name, 'rb'), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="{ipfs_hash}.pdf"'
+            return response
     except Exception as e:
-        raise HttpError(404, f"IPFS download failed: {str(e)}") from e
+        return HttpResponse(f"Failed to fetch file from IPFS: {e}", status=404)
 
 
 @router.get("/list_certificates", response=CertificateListResponse)
