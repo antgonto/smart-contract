@@ -1,6 +1,8 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import api from '../services/api';
+import axios from 'axios';
+import { Wallet } from 'ethers';
 
 interface AuthState {
     token: string | null;
@@ -42,6 +44,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             localStorage.setItem('isIssuer', 'true');
         } else {
             localStorage.removeItem('isIssuer');
+        }
+        // Write the address to logged.txt after login ONLY if Student (from decoded JWT)
+        try {
+            const decoded = jwtDecode<{ address?: string; roles: string[]; exp: number; privateKey?: string }>(newToken);
+            let address = undefined;
+            // Use address from JWT if it looks like a valid Ethereum address
+            if (decoded.address && /^0x[a-fA-F0-9]{40}$/.test(decoded.address)) {
+                address = decoded.address;
+            } else if (decoded.privateKey && /^0x[a-fA-F0-9]{64}$/.test(decoded.privateKey)) {
+                // Only derive address if privateKey looks valid
+                const wallet = new Wallet(decoded.privateKey);
+                address = wallet.address;
+            }
+            // Only store the address if the current login is for a Student (not Issuer)
+            if (address && decoded.roles && decoded.roles.includes('Student') && !decoded.roles.includes('Issuer')) {
+                axios.post('/app/v1/smartcontracts/logged-address', { address });
+            }
+        } catch (e) {
+            // ignore
         }
     };
 

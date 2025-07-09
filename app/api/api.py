@@ -1,4 +1,6 @@
-from ninja import NinjaAPI, Swagger
+from ninja import NinjaAPI, Swagger, Schema
+from django.http import JsonResponse
+import os
 
 
 api = NinjaAPI(
@@ -39,3 +41,33 @@ for path, router, tags in routers:
             if "has already been attached" not in str(e):
                 # Re-raise if it's a different error
                 raise
+
+
+class AddressRequest(Schema):
+    address: str
+
+
+@api.post("/logged-address")
+def set_logged_address(request, payload: AddressRequest):
+    try:
+        logged_path = os.path.join(os.path.dirname(__file__), '../logged.txt')
+        # Always delete and recreate the file to ensure only the last student address is stored
+        if os.path.exists(logged_path):
+            os.remove(logged_path)
+        with open(logged_path, 'w') as f:
+            f.write(payload.address)
+        return JsonResponse({"status": "ok"})
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
+
+
+@api.get("/logged-address-get")
+def get_logged_address(request):
+    import os
+    logged_path = os.path.join(os.path.dirname(__file__), '../logged.txt')
+    try:
+        with open(logged_path, 'r') as f:
+            address = f.read().strip()
+        return {"address": address}
+    except Exception:
+        return {"address": None}

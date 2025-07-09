@@ -40,13 +40,16 @@ class TokenResponse(BaseModel):
 class ErrorResponse(BaseModel):
     error: str
 
-def get_tokens_for_user(user, roles=[]):
+def get_tokens_for_user(user, roles=[], address=None):
     refresh = RefreshToken.for_user(user)
     # Add custom claims
-    account = user.account_set.first()
     refresh['roles'] = roles
-    if account:
-        refresh['address'] = account.address
+    if address:
+        refresh['address'] = address
+    else:
+        account = user.account_set.first()
+        if account:
+            refresh['address'] = account.address
     return {
         'refresh': str(refresh),
         'access': str(refresh.access_token),
@@ -192,7 +195,7 @@ def login(request, login_data: LoginRequest):
 
         # Block 4: Token generation
         try:
-            tokens = get_tokens_for_user(user, roles)
+            tokens = get_tokens_for_user(user, roles, address)
             return TokenResponse(access=tokens["access"], refresh=tokens["refresh"], roles=roles)
         except Exception as e:
             print(f"Error in token generation: {e}")

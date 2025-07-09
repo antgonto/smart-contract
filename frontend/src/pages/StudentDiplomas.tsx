@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   EuiPanel,
   EuiTitle,
-  EuiText,
   EuiPageHeader,
   EuiPageTemplate,
   EuiSpacer,
@@ -59,16 +58,24 @@ const StudentDiplomas = () => {
       setError('Access denied: Only students can view their diplomas.');
       return;
     }
-    const fetchDiplomas = async () => {
+    // Use the address from logged.txt via backend endpoint
+    const fetchLoggedAddressAndDiplomas = async () => {
       try {
-        const data = await fetchStudentDiplomas(address);
-        setDiplomas(data);
+        const res = await fetch('/app/v1/smartcontracts/logged-address-get');
+        const data = await res.json();
+        console.log("Address: ", data)
+        if (data.address) {
+          const diplomasData = await fetchStudentDiplomas(data.address);
+          setDiplomas(diplomasData);
+        } else {
+          setError('No logged address found.');
+        }
       } catch (e) {
         setError('Failed to fetch diplomas.');
       }
     };
-    fetchDiplomas();
-  }, [isAuthenticated, roles, address]);
+    fetchLoggedAddressAndDiplomas();
+  }, [isAuthenticated, roles]);
 
   if (error) {
     return <EuiCallOut title="Error" color="danger">{error}</EuiCallOut>;
