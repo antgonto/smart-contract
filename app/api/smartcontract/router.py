@@ -792,3 +792,94 @@ def verify_certificate(request, cert_hash: str):
         }
     except Exception as e:
         return {"error": f"Certificate not found or error: {str(e)}"}
+
+@router.post("/register_onchain/", response=CertificateOut)
+def register_certificate_onchain(request, cert_hash: str, recipient: str, metadata: str = "", ipfs_cid: str = ""):
+    """
+    Register a certificate fully on-chain (all metadata, optionally with IPFS CID).
+    """
+    contract = manager.get_contract()
+    if contract is None:
+        raise HttpError(500, f"Contract not loaded: {manager.get_error()}")
+    try:
+        tx = contract.functions.registerCertificate(
+            Web3.toBytes(hexstr=cert_hash),
+            recipient,
+            ipfs_cid
+        ).transact({"from": request.user.wallet_address})
+        receipt = manager.w3.eth.wait_for_transaction_receipt(tx)
+        return CertificateOut(
+            cert_hash=cert_hash,
+            issuer=request.user.wallet_address,
+            student=recipient,
+            issued_at=int(datetime.datetime.now().timestamp()),
+            ipfs_cid=ipfs_cid,
+            role="Issuer",
+            gas_used=receipt.gasUsed
+        )
+    except Exception as e:
+        raise HttpError(500, f"Error registering certificate on-chain: {e}")
+
+@router.get("/list_certificates_by_issuer/", response=CertificateListResponse)
+def list_certificates_by_issuer(request, issuer_address: str):
+    """
+    List all certificates issued by a given issuer (on-chain).
+    """
+    contract = manager.get_contract()
+    if contract is None:
+        raise HttpError(500, f"Contract not loaded: {manager.get_error()}")
+    certs = []
+    # This assumes the contract or backend can filter by issuer; otherwise, filter in Python
+    for cert_hash, cert in contract.functions.getAllCertificates().call().items():
+        if cert['issuer'].lower() == issuer_address.lower():
+            certs.append(CertificateListItem(
+                cert_hash=cert_hash,
+                issuer=cert['issuer'],
+                recipient=cert['student'],
+                ipfs_hash=cert['ipfsCid'],
+                metadata="",
+                content=""
+            ))
+    return CertificateListResponse(certificates=certs)
+
+@router.get("/list_certificates_by_student/", response=CertificateListResponse)
+def list_certificates_by_student(request, student_address: str):
+    """
+    List all certificates for a given student (on-chain).
+    """
+    contract = manager.get_contract()
+    if contract is None:
+        raise HttpError(500, f"Contract not loaded: {manager.get_error()}")
+    certs = []
+    for cert_hash, cert in contract.functions.getAllCertificates().call().items():
+        if cert['student'].lower() == student_address.lower():
+            certs.append(CertificateListItem(
+                cert_hash=cert_hash,
+                issuer=cert['issuer'],
+                recipient=cert['student'],
+                ipfs_hash=cert['ipfsCid'],
+                metadata="",
+                content=""
+            ))
+    return CertificateListResponse(certificates=certs)
+
+@router.get("/validate_certificate/", response=CertificateOut)
+def validate_certificate(request, cert_hash: str):
+    """
+    Validate a certificate by its hash (on-chain).
+    """
+    contract = manager.get_contract()
+    if contract is None:
+        raise HttpError(500, f"Contract not loaded: {manager.get_error()}")
+    cert = contract.functions.certificates(Web3.toBytes(hexstr=cert_hash)).call()
+    if cert[3] == 0:
+        raise HttpError(404, "Certificate not found")
+    return CertificateOut(
+        cert_hash=cert_hash,
+        issuer=cert[1],
+        student=cert[2],
+        issued_at=cert[3],
+        ipfs_cid=cert[4],
+        role=cert[6],
+        gas_used=None
+    )

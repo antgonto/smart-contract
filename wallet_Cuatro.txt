@@ -1,3 +1,0 @@
-Address: 0xF192EB0df01478fA551E2393AF1cc7B7d292d932
-Private Key: 9bcad266950e53d7166ab769ed6689aaaffdaed1b0edbba1e78b38b16686361d
-Mnemonic: mandate civil any skill picnic icon release hover sell blanket door weekend

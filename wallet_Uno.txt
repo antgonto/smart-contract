@@ -1,3 +1,0 @@
-Address: 0x3932E1D4E294cAa439584fE1260CC189C0f33029
-Private Key: 7124fcaeb85f568102484f3d68dd79c04bf46cfe9cdbb1597a429d7f92416101
-Mnemonic: youth stumble raw know taxi cheese disease security drum quiz nothing inside
