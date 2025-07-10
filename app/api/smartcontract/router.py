@@ -762,3 +762,33 @@ def check_roles(request, address: str):
         return {"roles": roles}
     except Exception as e:
         return Response({"error": str(e)}, status=400)
+
+
+@router.get("/verify_certificate/{cert_hash}")
+def verify_certificate(request, cert_hash: str):
+    contract = manager.get_contract()
+    try:
+        # Convert cert_hash to bytes32 if needed
+        if cert_hash.startswith('0x'):
+            cert_hash_bytes = bytes.fromhex(cert_hash[2:])
+        else:
+            cert_hash_bytes = bytes.fromhex(cert_hash)
+        # Try to get the certificate from the blockchain
+        cert_data = contract.functions.getCertificate(cert_hash_bytes).call()
+        # cert_data: (issuer, student, timestamp, isRevoked, ipfsCid)
+        if len(cert_data) == 5:
+            issuer, student, timestamp, is_revoked, ipfs_hash = cert_data
+        else:
+            issuer, student, timestamp, is_revoked = cert_data
+            ipfs_hash = ""
+        # If the certificate is not revoked and has an IPFS hash, return details
+        return {
+            "hash": cert_hash,
+            "issuer": issuer,
+            "student": student,
+            "timestamp": timestamp,
+            "is_revoked": is_revoked,
+            "ipfs_hash": ipfs_hash
+        }
+    except Exception as e:
+        return {"error": f"Certificate not found or error: {str(e)}"}
