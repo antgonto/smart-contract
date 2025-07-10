@@ -19,7 +19,7 @@ import VerificationPortal from './components/VerificationPortal';
 import Dashboard from "./pages/Dashboard";
 import AllAccountsView from './pages/AllAccountsView';
 import CreateWalletView from './pages/CreateWalletView';
-import StudentDiplomas from './pages/StudentDiplomas';
+import StudentDiplomas from "./pages/StudentDiplomas";
 
 function App() {
   return (

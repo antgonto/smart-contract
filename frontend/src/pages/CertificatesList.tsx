@@ -13,29 +13,21 @@ import {
   downloadCertificateOffchain, fetchDashboardMetrics
 } from '../services/api';
 
-const recentOpsColumns = [
-  { field: 'timestamp', name: 'Timestamp', width: '10%' },
-  { field: 'actor', name: 'Actor', width: '30%' },
-  { field: 'operation', name: 'Operation', width: '10%' },
-  { field: 'type', name: 'Type', width: '10%' },
-  { field: 'gas_used', name: 'Gas Used', width: '10%' },
-];
-
-  const downloadCertificate = async(ipfsHash: string) => {
-    try {
-      const blob = await downloadCertificateOffchain(ipfsHash);
-      const url = window.URL.createObjectURL(new Blob([blob]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${ipfsHash}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.parentNode?.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (e) {
-      alert('Failed to download certificate.');
-    }
-  };
+const downloadCertificate = async(ipfsHash: string) => {
+  try {
+    const blob = await downloadCertificateOffchain(ipfsHash);
+    const url = window.URL.createObjectURL(new Blob([blob]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${ipfsHash}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Failed to download certificate.');
+  }
+};
 
 const certificateColumns = [
   { field: 'id', name: 'ID', width: '2%' },

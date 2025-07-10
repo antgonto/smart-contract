@@ -6,8 +6,6 @@ from django.conf import settings
 def issuer_certificates(request: HttpRequest):
     # Call the API endpoint to get all certificates
     api_url = '/app/v1/smartcontracts/smartcontract/list_certificates'  # Adjust if needed
-    # If running locally, you may need to use http://localhost:8000 or similar
-    # api_url = 'http://localhost:8000/app/v1/smartcontracts/smartcontract/list_certificates'
     try:
         response = requests.get(api_url)
         response.raise_for_status()

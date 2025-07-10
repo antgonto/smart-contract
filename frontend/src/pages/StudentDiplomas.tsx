@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   EuiPanel,
   EuiTitle,
-  EuiText,
   EuiPageHeader,
   EuiPageTemplate,
   EuiSpacer,
@@ -15,10 +14,10 @@ import { useAuth } from '../contexts/AuthContext';
 const diplomaColumns = [
   { field: 'id', name: 'ID', width: '5%' },
   { field: 'cert_hash', name: 'On-chain Certificate Hash', width: '35%' },
-  { field: 'ipfs_hash', name: 'IPFS CID', width: '35%' },
+  { field: 'ipfs_hash', name: 'Off-chain Certificate Hash', width: '35%' },
   { field: 'issue_date', name: 'Issue Date', width: '15%',
-    render: (item: any) => (
-      item.issue_date ? new Date(item.issue_date * 1000).toLocaleDateString() : '-' // assuming issue_date is a unix timestamp
+    render: (value: any) => (
+      value ? new Date(value * 1000).toLocaleDateString() : '-'
     )
   },
   {
@@ -59,16 +58,25 @@ const StudentDiplomas = () => {
       setError('Access denied: Only students can view their diplomas.');
       return;
     }
-    const fetchDiplomas = async () => {
+    // Use the address from logged.txt via backend endpoint
+    const fetchLoggedAddressAndDiplomas = async () => {
       try {
-        const data = await fetchStudentDiplomas(address);
-        setDiplomas(data);
+        const res = await fetch('/app/v1/smartcontracts/logged-address-get');
+        const data = await res.json();
+        console.log("Address: ", data)
+        if (data.address) {
+          const diplomasData = await fetchStudentDiplomas(data.address);
+          console.log(diplomasData)
+          setDiplomas(diplomasData);
+        } else {
+          setError('No logged address found.');
+        }
       } catch (e) {
         setError('Failed to fetch diplomas.');
       }
     };
-    fetchDiplomas();
-  }, [isAuthenticated, roles, address]);
+    fetchLoggedAddressAndDiplomas();
+  }, [isAuthenticated, roles]);
 
   if (error) {
     return <EuiCallOut title="Error" color="danger">{error}</EuiCallOut>;

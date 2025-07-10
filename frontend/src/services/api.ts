@@ -76,15 +76,24 @@ export const persistTransaction = async (transaction: any) => {
   return api.post('/api/transactions/', transaction);
 };
 
-export const fetchStudentDiplomas = async (address: string) => {
-  // The backend uses the JWT to determine the student, so address is not needed, but kept for compatibility
-  const response = await api.get('/student/certificates');
+export const fetchStudentDiplomas = async (studentAddress: string) => {
+  if (!studentAddress) {
+    throw new Error('Student address is required');
+  }
+  const response = await api.get('/app/v1/smartcontracts/student/certificates', {
+    params: { student_address: studentAddress },
+  });
+  console.log("Response", response)
+  // Accept both response.data.certificates and response.data (array)
+  const items = Array.isArray(response.data)
+    ? response.data
+    : (response.data.certificates || []);
   // Map backend fields to expected frontend fields (including issue_date)
-  return response.data.map((item: any, idx: number) => ({
+  return items.map((item: any, idx: number) => ({
     id: idx + 1,
-    cert_hash: item.hash,
-    ipfs_hash: item.ipfs_cid || item.ipfsHash || '',
-    issue_date: item.timestamp, // assuming timestamp is the issue date
+    cert_hash: item.cert_hash || item.hash,
+    ipfs_hash: item.ipfs_hash,
+    issue_date: item.issue_date || item.timestamp || item.block_number,
     ...item,
   }));
 };
