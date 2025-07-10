@@ -92,28 +92,42 @@ const VerificationPortal = () => {
                                         <div><b>Revoked:</b> {verificationResult.is_revoked ? 'Yes' : 'No'}</div>
                                         <div><b>IPFS CID:</b> {verificationResult.ipfs_hash || '-'}</div>
                                     </EuiCallOut>
-                                    {verificationResult.ipfs_hash && (
-                                        <>
-                                            <EuiSpacer size="m" />
-                                            <button
-                                                onClick={async () => {
-                                                    try {
-                                                        const res = await axios.get(`/app/v1/smartcontracts/smartcontract/download_offchain/${verificationResult.ipfs_hash}`, { responseType: 'blob' });
-                                                        const url = window.URL.createObjectURL(res.data);
-                                                        const link = document.createElement('a');
-                                                        link.href = url;
-                                                        link.setAttribute('download', `${verificationResult.ipfs_hash}.pdf`);
-                                                        document.body.appendChild(link);
-                                                        link.click();
-                                                        link.parentNode?.removeChild(link);
-                                                        window.URL.revokeObjectURL(url);
-                                                    } catch (e) {
-                                                        alert('Failed to download diploma.');
-                                                    }
-                                                }}
-                                            >Download PDF</button>
-                                        </>
-                                    )}
+                                    <EuiSpacer size="m" />
+                                    <EuiFormRow label="Enter IPFS CID to download diploma" fullWidth>
+                                        <EuiFieldText
+                                            value={""}
+                                            onChange={(e) => setCertificateHash(e.target.value)}
+                                            placeholder="Enter IPFS CID"
+                                            fullWidth
+                                            disabled={false}
+                                        />
+                                    </EuiFormRow>
+                                    <EuiSpacer size="m" />
+                                    <EuiButton
+                                        fill
+                                        iconType="download"
+                                        onClick={async () => {
+                                            if (!certificateHash) {
+                                                alert('Please enter an IPFS CID.');
+                                                return;
+                                            }
+                                            try {
+                                                const res = await axios.get(`/app/v1/smartcontracts/smartcontract/download_offchain/${certificateHash}`, { responseType: 'blob' });
+                                                const url = window.URL.createObjectURL(res.data);
+                                                const link = document.createElement('a');
+                                                link.href = url;
+                                                link.setAttribute('download', `${certificateHash}.pdf`);
+                                                document.body.appendChild(link);
+                                                link.click();
+                                                link.parentNode?.removeChild(link);
+                                                window.URL.revokeObjectURL(url);
+                                            } catch (e) {
+                                                alert('Failed to download diploma.');
+                                            }
+                                        }}
+                                    >
+                                        Download Diploma
+                                    </EuiButton>
                                 </>
                             )}
                         </>
