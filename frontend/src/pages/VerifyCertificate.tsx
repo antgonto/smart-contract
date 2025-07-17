@@ -35,7 +35,7 @@ const VerifyCertificate: React.FC = () => {
           <EuiTitle size="l"><h1>Verify Certificate</h1></EuiTitle>
         </EuiPageHeader>
         <EuiForm component="form" onSubmit={handleVerify}>
-          <EuiFormRow label="Certificate Hash">
+          <EuiFormRow label="Certificate Hash On-Chain">
             <EuiFieldText
               placeholder="Enter certificate hash"
               value={certificateHash}

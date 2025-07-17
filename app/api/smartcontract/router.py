@@ -27,7 +27,7 @@ from typing import List
 router = Router(tags=["smartcontract"])
 
 manager = ContractManager()
-manager.refresh()
+# manager.refresh()
 
 IPFS_API_URL = os.getenv("IPFS_API_URL", "/dns/ipfs/tcp/5001/http")
 
@@ -842,9 +842,8 @@ def register_certificate_onchain(request, cert_hash: str, recipient: str, metada
         raise HttpError(500, f"Error registering certificate on-chain: {e}")
 
 @router.get("/list_certificates_by_issuer/", response=CertificateListResponse)
-def list_certificates_by_issuer(request):
+def list_certificates_by_issuer(request, issuer_address: str):
     """List all certificates issued by the connected issuer account."""
-    issuer_address = request.user.wallet_address  # Get from request context
     certs = []
     try:
         manager.refresh()
@@ -853,29 +852,29 @@ def list_certificates_by_issuer(request):
             raise HttpError(500, f"Contract not loaded: {manager.get_error()}")
         events = contract.events.CertificateRegistered().get_logs(fromBlock=0)
         for event in events:
-            cert_hash = event.args.certHash.hex()
-            issuer = getattr(event.args, 'issuer', None)
-            recipient = getattr(event.args, 'student', None)
-            ipfs_hash = getattr(event.args, 'ipfsCid', None)
-            metadata = ipfs_hash  # For compatibility with frontend/table
-            content = None
-            block_number = getattr(event, 'blockNumber', None)
-            transaction_hash = event.transactionHash.hex() if hasattr(event, 'transactionHash') else None
-            log_index = getattr(event, 'logIndex', None)
-            gas_used = None
-            if transaction_hash:
-                try:
-                    receipt = manager.web3.eth.get_transaction_receipt(transaction_hash)
-                    gas_used = receipt['gasUsed']
-                except Exception:
-                    gas_used = None
             # Only include certificates where the issuer matches the connected account
-            if issuer and issuer.lower() == issuer_address.lower():
+            if event.args.issuer.lower() == issuer_address.lower():
+                cert_hash = event.args.diplomaId.hex()
+                issuer = getattr(event.args, 'issuer', None)
+                recipient = getattr(event.args, 'student', None)
+                ipfs_hash = getattr(event.args, 'ipfsHash', None)
+                metadata = ipfs_hash  # For compatibility with frontend/table
+                content = None
+                block_number = getattr(event, 'blockNumber', None)
+                transaction_hash = event.transactionHash.hex() if hasattr(event, 'transactionHash') else None
+                log_index = getattr(event, 'logIndex', None)
+                gas_used = None
+                if transaction_hash:
+                    try:
+                        receipt = manager.web3.eth.get_transaction_receipt(transaction_hash)
+                        gas_used = receipt['gasUsed']
+                    except Exception:
+                        gas_used = None
                 certs.append({
                     "cert_hash": cert_hash,
                     "issuer": issuer,
                     "recipient": recipient,
-                    "recipient_address": recipient,  # Add recipient address to the table
+                    "recipient_address": recipient,
                     "metadata": metadata,
                     "content": content,
                     "ipfs_hash": ipfs_hash,
@@ -886,15 +885,12 @@ def list_certificates_by_issuer(request):
                 })
         return CertificateListResponse(certificates=certs)
     except Exception as e:
-        import traceback
-        print('Exception in list_certificates_by_issuer:', e)
-        traceback.print_exc()
+        print(f"Error fetching certificates for issuer {issuer_address}: {e}")
         raise HttpError(500, f"Failed to list certificates: {str(e)}") from e
 
 @router.get("/list_certificates_by_student/", response=CertificateListResponse)
-def list_certificates_by_student(request):
+def list_certificates_by_student(request, student_address: str):
     """List all certificates for the connected student account."""
-    student_address = request.user.wallet_address  # Get from request context
     certs = []
     try:
         manager.refresh()
@@ -903,29 +899,29 @@ def list_certificates_by_student(request):
             raise HttpError(500, f"Contract not loaded: {manager.get_error()}")
         events = contract.events.CertificateRegistered().get_logs(fromBlock=0)
         for event in events:
-            cert_hash = event.args.certHash.hex()
-            issuer = getattr(event.args, 'issuer', None)
-            recipient = getattr(event.args, 'student', None)
-            ipfs_hash = getattr(event.args, 'ipfsCid', None)
-            metadata = ipfs_hash  # For compatibility with frontend/table
-            content = None
-            block_number = getattr(event, 'blockNumber', None)
-            transaction_hash = event.transactionHash.hex() if hasattr(event, 'transactionHash') else None
-            log_index = getattr(event, 'logIndex', None)
-            gas_used = None
-            if transaction_hash:
-                try:
-                    receipt = manager.web3.eth.get_transaction_receipt(transaction_hash)
-                    gas_used = receipt['gasUsed']
-                except Exception:
-                    gas_used = None
             # Only include certificates where the recipient matches the connected account
-            if recipient and recipient.lower() == student_address.lower():
+            if event.args.student.lower() == student_address.lower():
+                cert_hash = event.args.diplomaId.hex()
+                issuer = getattr(event.args, 'issuer', None)
+                recipient = getattr(event.args, 'student', None)
+                ipfs_hash = getattr(event.args, 'ipfsHash', None)
+                metadata = ipfs_hash  # For compatibility with frontend/table
+                content = None
+                block_number = getattr(event, 'blockNumber', None)
+                transaction_hash = event.transactionHash.hex() if hasattr(event, 'transactionHash') else None
+                log_index = getattr(event, 'logIndex', None)
+                gas_used = None
+                if transaction_hash:
+                    try:
+                        receipt = manager.web3.eth.get_transaction_receipt(transaction_hash)
+                        gas_used = receipt['gasUsed']
+                    except Exception:
+                        gas_used = None
                 certs.append({
                     "cert_hash": cert_hash,
                     "issuer": issuer,
                     "recipient": recipient,
-                    "recipient_address": recipient,  # Add recipient address to the table
+                    "recipient_address": recipient,
                     "metadata": metadata,
                     "content": content,
                     "ipfs_hash": ipfs_hash,
@@ -936,9 +932,7 @@ def list_certificates_by_student(request):
                 })
         return CertificateListResponse(certificates=certs)
     except Exception as e:
-        import traceback
-        print('Exception in list_certificates_by_student:', e)
-        traceback.print_exc()
+        print(f"Error fetching certificates for {student_address}: {e}")
         raise HttpError(500, f"Failed to list certificates: {str(e)}") from e
 
 @router.get("/validate_certificate/", response=CertificateOut)

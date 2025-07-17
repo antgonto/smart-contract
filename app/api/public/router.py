@@ -64,7 +64,7 @@ def verify_certificate(request, certificate_hash: str, payload: RecaptchaPayload
 
         # Check if the certificate exists (issuer will not be the zero address)
         if issuer == "0x0000000000000000000000000000000000000000":
-            return VerificationResult(is_valid=False, error="Certificate not found.")
+            return VerificationResult(is_valid=False, is_revoked=False, error="Certificate not found.")
 
         return VerificationResult(
             is_valid=not is_revoked,
@@ -74,4 +74,4 @@ def verify_certificate(request, certificate_hash: str, payload: RecaptchaPayload
             timestamp=timestamp
         )
     except Exception as e:
-        return VerificationResult(is_valid=False, error=str(e))
+        return VerificationResult(is_valid=False, is_revoked=False, error=str(e))
