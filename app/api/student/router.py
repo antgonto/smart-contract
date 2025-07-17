@@ -9,7 +9,7 @@ from django.conf import settings
 from app.api.smartcontract.contract_manager import ContractManager
 
 manager = ContractManager()
-manager.refresh()
+# manager.refresh()
 
 
 
@@ -45,10 +45,10 @@ def get_my_certificates(request, student_address: str):
         events = contract.events.CertificateRegistered().get_logs(fromBlock=0)
         certificates = []
         for event in events:
-            cert_hash = event.args.certHash.hex()
+            cert_hash = event.args.diplomaId.hex()
             issuer = getattr(event.args, 'issuer', None)
             student = getattr(event.args, 'student', None)
-            ipfs_hash = getattr(event.args, 'ipfsCid', None)
+            ipfs_hash = getattr(event.args, 'ipfsHash', None)
             timestamp = getattr(event.args, 'issuedAt', None)
             is_revoked = False  # You may want to check for revocation events if needed
             if student and student.lower() == student_address.lower():

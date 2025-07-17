@@ -16,7 +16,7 @@ import os
 import json
 
 manager = ContractManager()
-manager.refresh()
+# manager.refresh()
 
 
 router = Router(tags=["auth"])

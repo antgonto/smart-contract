@@ -1,5 +1,7 @@
 from ninja import Router, Schema
 from web3 import Web3
+from app.models import Certificate
+import os
 
 import app.api.auth
 from app.api.authorization import JWTAuth
@@ -27,6 +29,7 @@ class IssueRequest(Schema):
     student_address: str
     certificate_hash: str
     ipfs_cid: str
+    tx_hash: str
 
 class RevokeRequest(Schema):
     certificate_hash: str
@@ -39,20 +42,50 @@ def issue_certificate(request, data: IssueRequest):
 
     issuer_address = request.user.account.address
 
-    tx_data = contract.functions.registerCertificate(
-        Web3.to_bytes(
-            hexstr=data.certificate_hash if data.certificate_hash.startswith("0x") else "0x" + data.certificate_hash),
-        Web3.to_checksum_address(data.student_address),
-        data.ipfs_cid
-    ).build_transaction({
-        'from': issuer_address,
-        'nonce': Web3.eth.get_transaction_count(issuer_address),
-        'gas': 2000000, # Placeholder, estimate gas properly
-        'gasPrice': Web3.eth.gas_price,
-        'chainId': Web3.eth.chain_id
-    })
+    try:
+        # Save certificate details to the database
+        Certificate.objects.create(
+            diploma_id=data.certificate_hash,
+            student_address=data.student_address,
+            issuer_address=issuer_address,
+            tx_hash=data.tx_hash,
+            ipfs_hash=data.ipfs_cid
+        )
 
-    return tx_data
+        # Create a text file with certificate details
+        student_short_address = data.student_address[:6]
+        app_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+        i = 1
+        while True:
+            file_path = os.path.join(app_dir, f"{student_short_address}_cert_{i}.txt")
+            if not os.path.exists(file_path):
+                break
+            i += 1
+
+        with open(file_path, 'w') as f:
+            f.write(f"student_address: {data.student_address}\n")
+            f.write(f"certificate_hash: {data.certificate_hash}\n")
+            f.write(f"ipfs_cid: {data.ipfs_cid}\n")
+            f.write(f"tx_hash: {data.tx_hash}\n")
+            f.write(f"issuer_address: {issuer_address}\n")
+
+        tx_data = contract.functions.registerCertificate(
+            Web3.to_bytes(
+                hexstr=data.certificate_hash if data.certificate_hash.startswith("0x") else "0x" + data.certificate_hash),
+            Web3.to_checksum_address(data.student_address),
+            data.ipfs_cid
+        ).build_transaction({
+            'from': issuer_address,
+            'nonce': Web3.eth.get_transaction_count(issuer_address),
+            'gas': 2000000, # Placeholder, estimate gas properly
+            'gasPrice': Web3.eth.gas_price,
+            'chainId': Web3.eth.chain_id
+        })
+
+        return tx_data
+    except Exception as e:
+        return 500, {"error": str(e)}
 
 @router.post("/certificates/revoke", response=UnsignedTx)
 def revoke_certificate(request, data: RevokeRequest):

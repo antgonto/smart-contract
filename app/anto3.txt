@@ -1,0 +1,3 @@
+address: 0xA76e0DfaD4547F09AEB84046265f276176513418
+private_key: d6cbaa6a2e8807b446c202237c6fcd1deef5f9f02a828bd50ab436d642297afc
+mnemonic: kangaroo gym until same fat urban plunge caught isolate champion eager pulse

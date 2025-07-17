@@ -1,0 +1,3 @@
+address: 0x85597cBcEF5a3d6F819677c1610D5a4d88aA74f1
+private_key: f1c1cafc84680efcdf07dba531218b49010fed09022d05fd27134ce6756e07a5
+mnemonic: wet diesel harsh know much tuition produce lecture steak crazy bright cable

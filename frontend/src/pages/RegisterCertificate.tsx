@@ -71,10 +71,9 @@ const RegisterCertificate = () => {
         <EuiCallOut color="success" title="Certificate Registered!" iconType="check">
           <div>Hash: {registerSuccess.cert_hash}</div>
           <div>Issuer: {registerSuccess.issuer}</div>
-          <div>Recipient: {registerSuccess.recipient}</div>
+          <div>Recipient: {registerSuccess.student}</div>
           <div>Issued At: {new Date(registerSuccess.issued_at * 1000).toLocaleString()}</div>
-          <div>Metadata: {registerSuccess.metadata}</div>
-          <div>IPFS: {registerSuccess.content}</div>
+          <div>IPFS: {registerSuccess.ipfs_cid}</div>
         </EuiCallOut>
       )}
     </EuiPanel>
