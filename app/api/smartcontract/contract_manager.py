@@ -52,7 +52,7 @@ class ContractManager:
             self.abi_load_error = str(e)
 
     def update_contract(self):
-        if self.abi and self.address:
+        if self.abi and self.address and self.web3:
             try:
                 self.contract = self.web3.eth.contract(address=Web3.to_checksum_address(self.address), abi=self.abi)
             except Exception as e:
@@ -62,6 +62,7 @@ class ContractManager:
             self.contract = None
 
     def refresh(self):
+        self.connect_web3()
         self.load_abi()
         self.load_address()
         self.update_contract()
