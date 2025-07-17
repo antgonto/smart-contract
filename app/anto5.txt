@@ -1,0 +1,3 @@
+address: 0xfcF784c463fbD19b798e60406568D716f3E17Eae
+private_key: f096b6c5d44420ebc2b57009d9e76576c52947990f14ce675f6763193093aa85
+mnemonic: immense element property kick caution someone certain wall farm prevent demand fan

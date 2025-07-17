@@ -7,20 +7,34 @@ contract CertificateRegistry is AccessControl {
     bytes32 public constant ISSUER_ROLE = keccak256("ISSUER_ROLE");
     bytes32 public constant STUDENT_ROLE = keccak256("STUDENT_ROLE");
 
+    enum StorageMode { ON_CHAIN, OFF_CHAIN }
+
     struct Certificate {
-        bytes32 certHash;
+        bytes32 diplomaId;
         address issuer;
         address student;
         uint256 issuedAt;
-        string ipfsCid;
+        string metadata;
+        StorageMode storageMode;
+        bytes pdfOnChain;
+        string ipfsHash;
         bool isRevoked;
         string role;
     }
 
     mapping(bytes32 => Certificate) public certificates;
-    mapping(address => bytes32[]) public certificatesByStudent; // Changed from certificatesByRecipient
+    mapping(address => bytes32[]) public certificatesByStudent;
 
-    event CertificateRegistered(bytes32 indexed certHash, address indexed issuer, address indexed student, uint256 issuedAt, string ipfsCid);
+    event CertificateRegistered(
+        bytes32 indexed diplomaId,
+        address indexed issuer,
+        address indexed student,
+        uint256 issuedAt,
+        string metadata,
+        StorageMode storageMode,
+        string ipfsHash,
+        bytes pdfOnChain
+    );
     event CertificateRevoked(bytes32 indexed certHash);
 
     constructor() {
@@ -28,30 +42,43 @@ contract CertificateRegistry is AccessControl {
         _grantRole(ISSUER_ROLE, msg.sender);
     }
 
-    function registerCertificate(bytes32 certHash, address student, string calldata ipfsCid) external onlyRole(ISSUER_ROLE) {
+    function registerCertificate(
+        bytes32 diplomaId,
+        address student,
+        string calldata metadata,
+        StorageMode storageMode,
+        bytes calldata pdfOnChain,
+        string calldata ipfsHash
+    ) external onlyRole(ISSUER_ROLE) {
         require(student != address(0), "Invalid student address");
-        require(bytes(ipfsCid).length > 0, "Empty IPFS CID");
-        require(certificates[certHash].issuedAt == 0, "Certificate already exists");
+        require(certificates[diplomaId].issuedAt == 0, "Certificate already exists");
 
-        Certificate memory cert = Certificate({
-            certHash: certHash,
+        if (storageMode == StorageMode.ON_CHAIN) {
+            require(pdfOnChain.length > 0, "PDF data is required for on-chain storage");
+        } else {
+            require(bytes(ipfsHash).length > 0, "IPFS hash is required for off-chain storage");
+        }
+
+        certificates[diplomaId] = Certificate({
+            diplomaId: diplomaId,
             issuer: msg.sender,
             student: student,
             issuedAt: block.timestamp,
-            ipfsCid: ipfsCid,
+            metadata: metadata,
+            storageMode: storageMode,
+            pdfOnChain: pdfOnChain,
+            ipfsHash: ipfsHash,
             isRevoked: false,
-            role: "Issuer" // Capitalized
+            role: "Issuer"
         });
 
-        certificates[certHash] = cert;
-        certificatesByStudent[student].push(certHash);
+        certificatesByStudent[student].push(diplomaId);
 
-        // Grant the student role if they don't have it already
         if (!hasRole(STUDENT_ROLE, student)) {
             _grantRole(STUDENT_ROLE, student);
         }
 
-        emit CertificateRegistered(certHash, msg.sender, student, block.timestamp, ipfsCid);
+        emit CertificateRegistered(diplomaId, msg.sender, student, block.timestamp, metadata, storageMode, ipfsHash, pdfOnChain);
     }
 
     function revokeCertificate(bytes32 certHash) external onlyRole(ISSUER_ROLE) {
@@ -68,49 +95,33 @@ contract CertificateRegistry is AccessControl {
         return (cert.issuer, cert.student, cert.issuedAt, cert.isRevoked);
     }
 
-    function getCertificateWithRole(bytes32 certHash) external view returns (address issuer, address student, uint256 timestamp, bool isRevoked, string memory role) {
-        require(certificates[certHash].issuedAt != 0, "Certificate does not exist");
-        Certificate memory cert = certificates[certHash];
-        return (cert.issuer, cert.student, cert.issuedAt, cert.isRevoked, cert.role);
-    }
-
     function getCertificatesByStudent(address student) external view returns (bytes32[] memory) {
         return certificatesByStudent[student];
     }
 
-    // Returns the roles of an address (issuer, student, or both)
-    function getRoles(address account) external view returns (string[] memory) {
-        string[] memory rolesTmp = new string[](3); // Increased size to 3 for Admin, Issuer, Student
-        uint count = 0;
-
-        if (hasRole(DEFAULT_ADMIN_ROLE, account)) {
-            rolesTmp[count] = "Admin";
-            count++;
+    function verifyCertificate(bytes32 diplomaId) external view returns (
+        bool exists,
+        address issuer,
+        address student,
+        uint256 issuedAt,
+        string memory metadata,
+        StorageMode storageMode,
+        bytes memory pdfOnChain,
+        string memory ipfsHash,
+        bool isRevoked
+    ) {
+        Certificate storage cert = certificates[diplomaId];
+        exists = cert.issuedAt != 0;
+        if (exists) {
+            issuer = cert.issuer;
+            student = cert.student;
+            issuedAt = cert.issuedAt;
+            metadata = cert.metadata;
+            storageMode = cert.storageMode;
+            pdfOnChain = cert.pdfOnChain;
+            ipfsHash = cert.ipfsHash;
+            isRevoked = cert.isRevoked;
         }
-        if (hasRole(ISSUER_ROLE, account)) {
-            rolesTmp[count] = "Issuer";
-            count++;
-        }
-        if (hasRole(STUDENT_ROLE, account)) {
-            rolesTmp[count] = "Student";
-            count++;
-        }
-
-        string[] memory roles = new string[](count);
-        for (uint i = 0; i < count; i++) {
-            roles[i] = rolesTmp[i];
-        }
-        return roles;
-    }
-
-    // Add a function to allow admin to grant ISSUER_ROLE to an address
-    function grantIssuerRole(address account) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        _grantRole(ISSUER_ROLE, account);
-    }
-
-    // Add a function to allow admin to revoke ISSUER_ROLE from an address
-    function revokeIssuerRole(address account) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        _revokeRole(ISSUER_ROLE, account);
     }
 
     function grantStudentRole(address account) public onlyRole(ISSUER_ROLE) {

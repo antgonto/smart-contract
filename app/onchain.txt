@@ -1,0 +1,3 @@
+address: 0xFd41533fdeE6F0304017bc48E9c86f2BB9E8Fdc6
+private_key: c0af8f15bf40298a8146b92f18a06f7af917ab8f8b994efd41ec3864623ed6ac
+mnemonic: menu elephant book fly major coach potato kid artefact notice hand resist
