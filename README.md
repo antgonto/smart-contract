@@ -1,6 +1,8 @@
 # Diploma Provisioning System
 
-### Video: [Diploma Provisioning System Overview](Video-SmartContract.mp4)
+### Video Overview
+
+> **Note:** GitHub does not support embedded playback of local video files. To view the video, [download Video-SmartContract.mp4](Video-SmartContract.mp4) and open it locally.
 
 This document provides a comprehensive overview of the diploma provisioning system, including its architecture, tooling, user flows, and step-by-step instructions for configuring and running the application.
 
@@ -141,4 +143,3 @@ Access the frontend at `http://localhost:3000` and the backend API at `http://lo
 ---
 
 For more details, refer to the original `README.md` and `Pycharm_tutorial.md` files.
-
