@@ -2,7 +2,7 @@
 
 ### Video Overview
 
-> **Note:** GitHub does not support embedded playback of local video files. To view the video, [download Video-SmartContract.mp4](Video-SmartContract.mp4) and open it locally.
+> **Note:** GitHub does not support embedded playback of local video files. To view the video, [click here to download Video-SmartContract.mp4](Video-SmartContract.mp4?raw=true) and open it locally.
 
 This document provides a comprehensive overview of the diploma provisioning system, including its architecture, tooling, user flows, and step-by-step instructions for configuring and running the application.
 
