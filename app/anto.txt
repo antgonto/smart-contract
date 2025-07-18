@@ -1,3 +1,0 @@
-address: 0x18B417F251DCc26Ef8d503A9d5E0f04E0EeD818F
-private_key: 1dba37f191c76a0de3ebe4ce8410db67267921a471e89de64a5610899d59ca5f
-mnemonic: recall economy alley coconut fitness actual ranch settle upon find cabbage attack

@@ -1,3 +1,0 @@
-address: 0xF6eCB1aE17c1951B6A0A3a087CFbFa414460592f
-private_key: f253f924982707bc2bed9f23e4a386efd9b0cc6f245c74db03cd01413e919941
-mnemonic: reveal toy salute asthma equip hurt orchard marble believe result grocery fringe

@@ -1,3 +1,0 @@
-address: 0xc99426692C5096892a61179528a3cC40baFD9D0A
-private_key: f176efbebe1ea4c1b57f00c67fdbf2922d65d75cca02482ec3233a1c9e5ef324
-mnemonic: town basic unaware switch genius age element imitate joke session wear fabric

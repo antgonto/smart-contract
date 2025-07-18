@@ -1,3 +1,0 @@
-address: 0xc5A50359372F9a75f5171eBB5dB5161E37913eE8
-private_key: cb80a162c677c45c997cfdcb851faed68f901a1f8038921d2e3d05eed5eca312
-mnemonic: topple convince nurse shallow poverty refuse loan kid assault observe knock fortune
