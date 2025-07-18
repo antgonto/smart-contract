@@ -23,6 +23,8 @@ class CertificateDetails(BaseModel):
     timestamp: int
     is_revoked: bool
     ipfs_hash: str
+    storage_mode: str
+    pdf_on_chain: str | None = None
 
 class ErrorSchema(BaseModel):
     error: str
@@ -50,6 +52,10 @@ def get_my_certificates(request, student_address: str):
             student = getattr(event.args, 'student', None)
             ipfs_hash = getattr(event.args, 'ipfsHash', None)
             timestamp = getattr(event.args, 'issuedAt', None)
+            storage_mode_int = getattr(event.args, 'storageMode', 1)  # Default to OFF_CHAIN
+            storage_mode = "ON_CHAIN" if storage_mode_int == 0 else "OFF_CHAIN"
+            pdf_on_chain_bytes = getattr(event.args, 'pdfOnChain', None)
+            pdf_on_chain_hex = pdf_on_chain_bytes.hex() if pdf_on_chain_bytes else None
             is_revoked = False  # You may want to check for revocation events if needed
             if student and student.lower() == student_address.lower():
                 certificates.append(
@@ -59,7 +65,9 @@ def get_my_certificates(request, student_address: str):
                         student=student,
                         timestamp=timestamp if timestamp is not None else 0,
                         is_revoked=is_revoked,
-                        ipfs_hash=ipfs_hash or ""
+                        ipfs_hash=ipfs_hash or "",
+                        storage_mode=storage_mode,
+                        pdf_on_chain=pdf_on_chain_hex
                     )
                 )
         return certificates

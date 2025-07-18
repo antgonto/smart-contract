@@ -12,6 +12,7 @@ from pydantic import BaseModel
 import hashlib
 from PyPDF2 import PdfReader
 from ninja.files import UploadedFile
+from ninja import File, Form
 from app.api.smartcontract import SEEDWeb3
 from app.api.smartcontract.contract_manager import ContractManager
 from django.http import HttpResponse
@@ -23,6 +24,8 @@ from django.conf import settings
 from ninja import Schema
 from ninja.responses import Response
 from typing import List
+from app.models import Certificate
+from django.db import IntegrityError
 
 router = Router(tags=["smartcontract"])
 
@@ -141,92 +144,6 @@ class RegisterCertificateSchema(Schema):
     pdf: str
     storage_mode: str
 
-
-@router.post("/register/", response=CertificateOut)
-def register_certificate_from_pdf(request, file: UploadedFile, recipient: str):
-    contract = manager.get_contract()
-    if contract is None:
-        raise HttpError(500, f"Contract not loaded: {manager.get_error()}")
-    # 1. Read PDF bytes
-    pdf_bytes = file.read()
-    file.seek(0)  # Reset pointer so PdfReader can read the file
-    # 2. Calculate hash
-    cert_hash = hashlib.sha256(pdf_bytes).hexdigest()
-
-    # 4. Upload to IPFS (offchain) and get IPFS hash
-    with ipfshttpclient.connect(IPFS_API_URL) as client:
-        res = client.add_bytes(pdf_bytes)
-        ipfs_hash = res
-
-    # Log cert_hash, recipient, and ipfs_hash before contract call
-    print(f"cert_hash: {cert_hash} (length: {len(cert_hash)})")
-    cert_hash_bytes = bytes.fromhex(cert_hash[2:] if cert_hash.startswith('0x') else cert_hash)
-    print(f"cert_hash: {cert_hash} (length: {len(cert_hash)})")
-    print(f"cert_hash_bytes: {cert_hash_bytes} (length: {len(cert_hash_bytes)})")
-    print(f"recipient: {recipient}")
-    print(f"ipfs_hash: {ipfs_hash}")
-
-    # 5. Register on blockchain, storing the IPFS hash as the metadata argument (for compatibility)
-    issuer = manager.web3.eth.accounts[0]
-    print(f"Using issuer address: {issuer}")
-    # Check if issuer has ISSUER_ROLE
-    try:
-        contract_issuer_role = contract.functions.ISSUER_ROLE().call()
-        has_issuer_role = contract.functions.hasRole(contract_issuer_role, issuer).call()
-        print(f"Issuer has ISSUER_ROLE: {contract_issuer_role}")
-        if not has_issuer_role:
-            raise HttpError(403, f"Issuer {issuer} does not have ISSUER_ROLE.")
-    except Exception as e:
-        print(f"Error checking ISSUER_ROLE: {e}")
-        raise HttpError(500, f"Error checking ISSUER_ROLE: {e}")
-
-    cert_hash_bytes = bytes.fromhex(cert_hash[2:] if cert_hash.startswith('0x') else cert_hash)
-    if not (isinstance(recipient, str) and recipient.startswith('0x') and len(recipient) == 42):
-        raise HttpError(400, f"Recipient must be a valid Ethereum address (got: {recipient})")
-    try:
-        # Pass ipfs_hash as the metadata argument for compatibility with event parsing
-        tx_hash = contract.functions.registerCertificate(
-            cert_hash_bytes,  # diplomaId
-            Web3.to_checksum_address(recipient),  # student
-            "{}",  # metadata (empty JSON object for now)
-            1,  # storageMode (1 for OFF_CHAIN/IPFS)
-            b'',  # pdfOnChain (empty bytes)
-            ipfs_hash  # ipfsHash
-        ).transact({"from": issuer})
-        print(f"tx_hash: {tx_hash}")
-        receipt = manager.web3.eth.get_transaction_receipt(tx_hash)
-        print(f"receipt: {receipt}")
-        gas_used = receipt['gasUsed']
-        print(f"gas_used: {gas_used}")
-        # Only call getCertificateWithRole if the transaction succeeded and status is 1
-        if receipt.get('status', 1) != 1:
-            raise HttpError(500, f"Certificate registration transaction failed (status={receipt.get('status')})")
-    except Exception as e:
-        from web3.exceptions import ContractLogicError
-        import logging
-        logging.error(f"Certificate registration failed: {e}")
-        if isinstance(e, ContractLogicError):
-            if "Certificate already exists" in str(e):
-                raise HttpError(409, "Certificate already exists for this hash.")
-            elif "revert" in str(e):
-                raise HttpError(400, f"Smart contract reverted: {str(e)}")
-        if "invalid address" in str(e).lower():
-            raise HttpError(400, f"Invalid Ethereum address: {recipient}")
-        # Add more detailed error for debugging
-        raise HttpError(500, f"Certificate registration failed: {str(e)}. ")
-
-    today = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
-    # Convert contract_issuer_role to hex string if it's bytes
-    role_str = contract_issuer_role.hex() if isinstance(contract_issuer_role, (bytes, bytearray)) else str(contract_issuer_role)
-    return CertificateOut(
-        cert_hash=cert_hash,
-        issuer=issuer,
-        student=recipient,
-        issued_at=today,
-        ipfs_cid=ipfs_hash,
-        role=role_str,
-        gas_used=gas_used
-    )
 
 
 @router.post("/compile/", response=CompileResponse)
@@ -379,49 +296,24 @@ def download_certificate_offchain(request, ipfs_hash: str):
 
 @router.get("/list_certificates", response=CertificateListResponse)
 def list_certificates(request):
+    from app.models import Certificate
     certificates = []
-    try:
-        manager.refresh()
-        contract = manager.get_contract()
-        if contract is None:
-            raise HttpError(500, f"Contract not loaded: {manager.get_error()}")
-        events = contract.events.DiplomaIssued().get_logs(fromBlock=0)
-        for event in events:
-            cert_hash = event.args.diplomaId.hex()
-            issuer = getattr(event.args, 'issuer', None)
-            recipient = getattr(event.args, 'student', None)
-            ipfs_hash = getattr(event.args, 'ipfsHash', None)
-            metadata = ipfs_hash  # For compatibility with frontend/table
-            content = None
-            block_number = getattr(event, 'blockNumber', None)
-            transaction_hash = event.transactionHash.hex() if hasattr(event, 'transactionHash') else None
-            log_index = getattr(event, 'logIndex', None)
-            gas_used = None
-            if transaction_hash:
-                try:
-                    receipt = manager.web3.eth.get_transaction_receipt(transaction_hash)
-                    gas_used = receipt['gasUsed']
-                except Exception:
-                    gas_used = None
-            certificates.append({
-                "cert_hash": cert_hash,
-                "issuer": issuer,
-                "recipient": recipient,
-                "recipient_address": recipient,  # Add recipient address to the table
-                "metadata": metadata,
-                "content": content,
-                "ipfs_hash": ipfs_hash,
-                "block_number": block_number,
-                "transaction_hash": transaction_hash,
-                "log_index": log_index,
-                "gas_used": gas_used,
-            })
-        return CertificateListResponse(certificates=certificates)
-    except Exception as e:
-        import traceback
-        print('Exception in list_certificates:', e)
-        traceback.print_exc()
-        raise HttpError(500, f"Failed to list certificates: {str(e)}") from e
+    for cert in Certificate.objects.all().order_by('-created_at'):
+        certificates.append({
+            "cert_hash": cert.diploma_id,
+            "issuer": cert.issuer_address,
+            "recipient": cert.student_address,
+            "recipient_address": cert.student_address,
+            "metadata": cert.ipfs_hash,  # For compatibility
+            "content": None,
+            "ipfs_hash": cert.ipfs_hash,
+            "block_number": None,
+            "transaction_hash": cert.tx_hash,
+            "log_index": None,
+            "gas_used": None,
+            "storage_mode": "OFF_CHAIN" if cert.ipfs_hash else "ON_CHAIN",
+        })
+    return CertificateListResponse(certificates=certificates)
 
 
 @router.get("/dashboard/metrics", response=DashboardMetrics)
@@ -802,6 +694,36 @@ def verify_certificate(request, cert_hash: str):
     except Exception as e:
         return {"error": f"Certificate not found or error: {str(e)}"}
 
+@router.get("/verify_certificate_details/{cert_hash}")
+def verify_certificate_details(request, cert_hash: str):
+    contract = manager.get_contract()
+    try:
+        if cert_hash.startswith('0x'):
+            cert_hash_bytes = bytes.fromhex(cert_hash[2:])
+        else:
+            cert_hash_bytes = bytes.fromhex(cert_hash)
+
+        cert_data = contract.functions.verifyCertificate(cert_hash_bytes).call()
+
+        exists, issuer, student, issued_at, metadata, storage_mode, pdf_on_chain, ipfs_hash, is_revoked = cert_data
+
+        if not exists:
+            return {"error": "Certificate not found."}
+
+        return {
+            "exists": exists,
+            "issuer": issuer,
+            "student": student,
+            "issued_at": issued_at,
+            "metadata": metadata,
+            "storage_mode": "ON_CHAIN" if storage_mode == 0 else "OFF_CHAIN",
+            "pdf_on_chain": pdf_on_chain.hex() if pdf_on_chain else None,
+            "ipfs_hash": ipfs_hash,
+            "is_revoked": is_revoked,
+        }
+    except Exception as e:
+        return {"error": f"An error occurred: {str(e)}"}
+
 @router.post("/register_onchain/", response=CertificateOut)
 def register_certificate_onchain(request, cert_hash: str, recipient: str, metadata: str = "", ipfs_cid: str = ""):
     """
@@ -902,10 +824,23 @@ def list_certificates_by_student(request, student_address: str):
             # Only include certificates where the recipient matches the connected account
             if event.args.student.lower() == student_address.lower():
                 cert_hash = event.args.diplomaId.hex()
+
+                # Call verifyCertificate to get all details, including storage_mode
+                try:
+                    cert_details = contract.functions.verifyCertificate(event.args.diplomaId).call()
+                    exists, issuer, student, issued_at, metadata, storage_mode, pdf_on_chain, ipfs_hash, is_revoked = cert_details
+
+                    if not exists:
+                        continue
+
+                    storage_mode_str = "ON_CHAIN" if storage_mode == 0 else "OFF_CHAIN"
+                except Exception:
+                    storage_mode_str = "OFF_CHAIN" if getattr(event.args, 'ipfsHash', None) else "UNKNOWN"
+
                 issuer = getattr(event.args, 'issuer', None)
                 recipient = getattr(event.args, 'student', None)
                 ipfs_hash = getattr(event.args, 'ipfsHash', None)
-                metadata = ipfs_hash  # For compatibility with frontend/table
+                metadata = ipfs_hash  # For compatibility
                 content = None
                 block_number = getattr(event, 'blockNumber', None)
                 transaction_hash = event.transactionHash.hex() if hasattr(event, 'transactionHash') else None
@@ -929,6 +864,7 @@ def list_certificates_by_student(request, student_address: str):
                     "transaction_hash": transaction_hash,
                     "log_index": log_index,
                     "gas_used": gas_used,
+                    "storage_mode": storage_mode_str,
                 })
         return CertificateListResponse(certificates=certs)
     except Exception as e:
@@ -977,93 +913,96 @@ def validate_certificate(request, cert_hash: str):
     except Exception as e:
         return {"error": f"Certificate not found or error: {str(e)}"}
 
-@router.post("/register_certificate", response=CertificateResponse)
-def register_certificate(request, payload: RegisterCertificateSchema):
-    import logging, base64
+@router.post("/register_certificate/", response=CertificateResponse)
+def register_certificate(request, recipient: str = Form(...), storage_mode: str = Form(...), file: UploadedFile = File(...)):
+    import logging
     try:
-        # Ensure the contract manager is connected to web3
         manager.connect_web3()
         if not manager.web3:
             raise HttpError(500, "Web3 provider is not initialized.")
-
-        logging.info(f"Received payload for register_certificate: {payload.dict()}")
-        storage_mode = payload.storage_mode
-        recipient = payload.student_address
-        pdf_base64 = payload.pdf
-        if not pdf_base64 or not recipient or not storage_mode:
-            logging.error(f"Missing required fields in payload: {payload.dict()}")
+        if not file or not recipient or not storage_mode:
+            logging.error(f"Missing required fields in payload: recipient={recipient}, storage_mode={storage_mode}, file={file}")
             raise HttpError(400, "Missing required fields: student_address, pdf, storage_mode")
-
-        pdf_bytes = base64.b64decode(pdf_base64)
+        pdf_bytes = file.read()
         cert_hash = Web3.keccak(pdf_bytes).hex()
-
-        # Use the first account from the connected web3 instance
         issuer = manager.web3.eth.accounts[0]
-
         pdf_on_chain = b''
         ipfs_hash = ""
+        storage_mode_enum = 0
         if storage_mode == "ON_CHAIN":
             pdf_on_chain = pdf_bytes
+            storage_mode_enum = 0
         elif storage_mode == "OFF_CHAIN":
-            import ipfshttpclient
-            with ipfshttpclient.connect(IPFS_API_URL) as client:
-                res = client.add_bytes(pdf_bytes)
-                ipfs_hash = res
+            try:
+                with ipfshttpclient.connect(IPFS_API_URL) as client:
+                    res = client.add_bytes(pdf_bytes)
+                    ipfs_hash = res
+                storage_mode_enum = 1
+            except Exception as e:
+                raise HttpError(500, f"IPFS upload failed: {str(e)}")
         else:
-            logging.error(f"Invalid storage_mode: {storage_mode}")
             raise HttpError(400, f"Invalid storage_mode: {storage_mode}")
-
-        metadata = "{}"  # Optionally derive metadata here
+        metadata = "{}"
         try:
             contract = manager.get_contract()
-            if not contract:
+            if contract is None:
                 raise HttpError(500, f"Contract not loaded: {manager.get_error()}")
-
-            tx_params = {
-                "from": issuer,
-                "gas": 25000000,  # Set gas limit close to the block gas limit
-            }
-
+            cert_hash_bytes = Web3.to_bytes(hexstr=cert_hash)
+            # Set a high gas limit for on-chain storage
             tx = contract.functions.registerCertificate(
-                Web3.to_bytes(hexstr=cert_hash),
+                cert_hash_bytes,
                 Web3.to_checksum_address(recipient),
                 metadata,
-                0 if storage_mode == "ON_CHAIN" else 1,
+                storage_mode_enum,
                 pdf_on_chain,
                 ipfs_hash
-            ).transact(tx_params)
+            ).transact({"from": issuer, "gas": 12000000})
             receipt = manager.web3.eth.wait_for_transaction_receipt(tx)
-            logging.info(f"Certificate registered: cert_hash={cert_hash}, tx_hash={tx.hex()}")
-
-            # Verify certificate is stored on-chain
-            verification_status = "Verification not performed"
-            if receipt.status == 1:
-                try:
-                    cert_hash_bytes = Web3.to_bytes(hexstr=cert_hash)
-                    cert_data = contract.functions.verifyCertificate(cert_hash_bytes).call()
-                    exists = cert_data[0]
-                    if exists:
-                        verification_status = "Certificate found on-chain."
-                        logging.info(f"Certificate verification success: cert_hash={cert_hash}, cert_data={cert_data}")
-                    else:
-                        verification_status = "Certificate NOT found on-chain after transaction."
-                        logging.error(f"Certificate verification failed: cert_hash={cert_hash} not found after tx.")
-                except Exception as verify_exc:
-                    logging.error(f"Certificate verification failed after tx: {verify_exc}")
-                    verification_status = f"Certificate verification failed with error: {verify_exc}"
-            else:
-                verification_status = "Transaction failed, certificate not registered."
-                logging.error(f"Transaction failed for cert_hash={cert_hash}, tx_hash={tx.hex()}")
-
+            if receipt.status != 1:
+                raise HttpError(500, "Certificate registration transaction failed.")
             return CertificateResponse(
                 ipfs_hash=ipfs_hash,
                 cert_hash=cert_hash,
                 tx_hash=tx.hex(),
-                message=verification_status,
+                message="Certificate registered successfully."
             )
         except Exception as e:
-            logging.error(f"Blockchain registration failed: {str(e)}")
-            raise HttpError(500, f"Blockchain registration failed: {str(e)}") from e
+            raise HttpError(500, f"Blockchain registration failed: {str(e)}")
     except Exception as e:
-        logging.error(f"Error in register_certificate: {str(e)}")
         raise HttpError(422, f"Unprocessable Entity: {str(e)}")
+
+
+@router.get("/download_onchain/{cert_hash}")
+def download_certificate_onchain(request, cert_hash: str):
+    """Download the on-chain stored PDF for a certificate by its hash."""
+    from django.http import FileResponse, HttpResponse
+    import tempfile
+    contract = manager.get_contract()
+    try:
+        # Convert cert_hash to bytes32 if needed
+        if cert_hash.startswith('0x'):
+            cert_hash_bytes = bytes.fromhex(cert_hash[2:])
+        else:
+            cert_hash_bytes = bytes.fromhex(cert_hash)
+        cert_data = contract.functions.verifyCertificate(cert_hash_bytes).call()
+        exists, issuer, student, issued_at, metadata, storage_mode, pdf_on_chain, ipfs_hash, is_revoked = cert_data
+        if not exists:
+            return HttpResponse("Certificate not found.", status=404)
+        if storage_mode != 0 or not pdf_on_chain:
+            return HttpResponse("Certificate is not stored on-chain or has no PDF data.", status=400)
+        # pdf_on_chain may be bytes or hex string
+        if isinstance(pdf_on_chain, str):
+            pdf_bytes = bytes.fromhex(pdf_on_chain[2:]) if pdf_on_chain.startswith('0x') else bytes.fromhex(pdf_on_chain)
+        else:
+            pdf_bytes = pdf_on_chain
+        if not pdf_bytes:
+            return HttpResponse("No PDF data found for this certificate.", status=404)
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+            tmp_file.write(pdf_bytes)
+            tmp_file.flush()
+            tmp_file.seek(0)
+            response = FileResponse(open(tmp_file.name, 'rb'), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="{cert_hash}.pdf"'
+            return response
+    except Exception as e:
+        return HttpResponse(f"Failed to fetch on-chain PDF: {e}", status=500)

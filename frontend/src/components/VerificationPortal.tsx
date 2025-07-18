@@ -11,38 +11,16 @@ import {
     EuiCard,
     EuiPage,
     EuiPageBody,
-    EuiSwitch
 } from '@elastic/eui';
+import { verifyCertificateDetails, downloadCertificateOffchain } from '../services/api';
+import { saveAs } from 'file-saver';
 
 const VerificationPortal = () => {
     const [certificateHash, setCertificateHash] = useState('');
     const [verificationResult, setVerificationResult] = useState(null);
     const [error, setError] = useState('');
     const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
-    const recaptchaRef = useRef<ReCAPTCHA>(null);
-    const [studentCertificates, setStudentCertificates] = useState<any[]>([]);
-    const [issuerCertificates, setIssuerCertificates] = useState<any[]>([]);
-    const [verifierCertHash, setVerifierCertHash] = useState('');
-    const [verifierResult, setVerifierResult] = useState<any>(null);
-    const [onChainRecipient, setOnChainRecipient] = useState('');
-    const [onChainIpfsCid, setOnChainIpfsCid] = useState('');
-    const [onChainCertHash, setOnChainCertHash] = useState('');
-    const [useOnChain, setUseOnChain] = useState(true);
-
-    useEffect(() => {
-        const studentAddress = window.localStorage.getItem('student_address');
-        if (studentAddress) {
-            axios.get(`/app/v1/smartcontracts/smartcontract/list_certificates_by_student/?student_address=${studentAddress}`)
-                .then(res => setStudentCertificates(res.data.certificates))
-                .catch(() => setStudentCertificates([]));
-        }
-        const issuerAddress = window.localStorage.getItem('issuer_address');
-        if (issuerAddress) {
-            axios.get(`/app/v1/smartcontracts/smartcontract/list_certificates_by_issuer/?issuer_address=${issuerAddress}`)
-                .then(res => setIssuerCertificates(res.data.certificates))
-                .catch(() => setIssuerCertificates([]));
-        }
-    }, []);
+    const recaptchaRef = useRef<any>(null);
 
     const handleVerify = async () => {
         if (!certificateHash) {
@@ -57,8 +35,8 @@ const VerificationPortal = () => {
         setVerificationResult(null);
 
         try {
-            const response = await axios.get(`/app/v1/smartcontracts/smartcontract/verify_certificate/${certificateHash}`);
-            setVerificationResult(response.data);
+            const response = await verifyCertificateDetails(certificateHash);
+            setVerificationResult(response);
         } catch (err) {
             setError('An error occurred while verifying the certificate.');
             console.error(err);
@@ -72,6 +50,36 @@ const VerificationPortal = () => {
 
     const onRecaptchaChange = (token: string | null) => {
         setRecaptchaToken(token);
+    };
+
+    const handleDownload = async () => {
+        if (!verificationResult) return;
+
+        const { storage_mode, ipfs_hash, pdf_on_chain, cert_hash } = verificationResult;
+
+        if (storage_mode === 'OFF_CHAIN' && ipfs_hash) {
+            try {
+                const blob = await downloadCertificateOffchain(ipfs_hash);
+                saveAs(blob, `${ipfs_hash}.pdf`);
+            } catch (e) {
+                setError('Failed to download off-chain certificate.');
+            }
+        } else if (storage_mode === 'ON_CHAIN' && pdf_on_chain) {
+            try {
+                const byteCharacters = atob(Buffer.from(pdf_on_chain, 'hex').toString('base64'));
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], { type: 'application/pdf' });
+                saveAs(blob, `${cert_hash || 'certificate'}.pdf`);
+            } catch (e) {
+                setError('Failed to process or download on-chain certificate.');
+            }
+        } else {
+            setError('Certificate data is not available for download.');
+        }
     };
 
     return (
@@ -111,43 +119,17 @@ const VerificationPortal = () => {
                                     <EuiCallOut color="success" title="Certificate Found">
                                         <div><b>Issuer:</b> {verificationResult.issuer}</div>
                                         <div><b>Student:</b> {verificationResult.student}</div>
-                                        <div><b>Timestamp:</b> {verificationResult.timestamp ? new Date(verificationResult.timestamp * 1000).toLocaleString() : '-'}</div>
+                                        <div><b>Timestamp:</b> {verificationResult.issued_at ? new Date(verificationResult.issued_at * 1000).toLocaleString() : '-'}</div>
                                         <div><b>Revoked:</b> {verificationResult.is_revoked ? 'Yes' : 'No'}</div>
-                                        <div><b>IPFS CID:</b> {verificationResult.ipfs_hash || '-'}</div>
+                                        <div><b>Storage Mode:</b> {verificationResult.storage_mode}</div>
+                                        {verificationResult.storage_mode === 'OFF_CHAIN' && <div><b>IPFS CID:</b> {verificationResult.ipfs_hash || '-'}</div>}
                                     </EuiCallOut>
-                                    <EuiSpacer size="m" />
-                                    <EuiFormRow label="Enter IPFS CID to download diploma" fullWidth>
-                                        <EuiFieldText
-                                            value={""}
-                                            onChange={(e) => setCertificateHash(e.target.value)}
-                                            placeholder="Enter IPFS CID"
-                                            fullWidth
-                                            disabled={false}
-                                        />
-                                    </EuiFormRow>
-                                    <EuiSpacer size="m" />
+                                    <EuiSpacer />
                                     <EuiButton
                                         fill
                                         iconType="download"
-                                        onClick={async () => {
-                                            if (!certificateHash) {
-                                                alert('Please enter an IPFS CID.');
-                                                return;
-                                            }
-                                            try {
-                                                const res = await axios.get(`/app/v1/smartcontracts/smartcontract/download_offchain/${certificateHash}`, { responseType: 'blob' });
-                                                const url = window.URL.createObjectURL(res.data);
-                                                const link = document.createElement('a');
-                                                link.href = url;
-                                                link.setAttribute('download', `${certificateHash}.pdf`);
-                                                document.body.appendChild(link);
-                                                link.click();
-                                                link.parentNode?.removeChild(link);
-                                                window.URL.revokeObjectURL(url);
-                                            } catch (e) {
-                                                alert('Failed to download diploma.');
-                                            }
-                                        }}
+                                        onClick={handleDownload}
+                                        isDisabled={!verificationResult || (verificationResult.storage_mode === 'ON_CHAIN' && !verificationResult.pdf_on_chain) || (verificationResult.storage_mode === 'OFF_CHAIN' && !verificationResult.ipfs_hash)}
                                     >
                                         Download Diploma
                                     </EuiButton>

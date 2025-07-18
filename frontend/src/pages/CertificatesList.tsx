@@ -10,9 +10,11 @@ import {
 } from '@elastic/eui';
 import {
   fetchCertificates,
-  downloadCertificateOffchain, fetchDashboardMetrics
+  downloadCertificateOffchain,
+  downloadCertificateOnchain,
+  fetchDashboardMetrics
 } from '../services/api';
-m import { saveAs } from 'file-saver';
+import { saveAs } from 'file-saver';
 
 const downloadCertificate = async (item: any) => {
     if (item.storage_mode === 'OFF_CHAIN' && item.ipfs_hash) {
@@ -23,8 +25,12 @@ const downloadCertificate = async (item: any) => {
             alert('Failed to download off-chain certificate.');
         }
     } else if (item.storage_mode === 'ON_CHAIN' && item.cert_hash) {
-        // On-chain download logic will be added here
-        alert('On-chain download is not yet implemented.');
+        try {
+            const blob = await downloadCertificateOnchain(item.cert_hash);
+            saveAs(blob, `${item.cert_hash}.pdf`);
+        } catch (e) {
+            alert('Failed to download on-chain certificate.');
+        }
     } else {
         alert('Certificate is not available for download.');
     }
@@ -60,7 +66,7 @@ const CertificatesList  = () => {
   useEffect(() => {
     fetchDashboardMetrics()
       .then(dataa => {
-        setMetrics(data);
+        setMetrics(dataa);
         setLoading(false);
       })
       .catch(err => {

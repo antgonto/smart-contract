@@ -35,70 +35,50 @@ const RegisterCertificate = () => {
     }
     setRegisterLoading(true);
 
-    const reader = new FileReader();
-    reader.readAsDataURL(pdfFile);
-    reader.onload = async () => {
-      try {
-        const base64Pdf = (reader.result as string).split(',')[1];
-        const result = await registerCertificate(recipient, base64Pdf, storageMode);
-        setRegisterSuccess(result);
-      } catch (err: any) {
-        setRegisterError(err?.response?.data?.detail || 'Registration failed.');
-      } finally {
-        setRegisterLoading(false);
-      }
-    };
-    reader.onerror = () => {
-      setRegisterError('Failed to read the PDF file.');
+    try {
+      const result = await registerCertificate(recipient, pdfFile, storageMode);
+      setRegisterSuccess(result);
+    } catch (err: any) {
+      setRegisterError(err?.response?.data?.detail || 'Registration failed.');
+    } finally {
       setRegisterLoading(false);
-    };
+    }
   };
 
   return (
     <EuiPanel style={{ maxWidth: 600, margin: '40px auto' }}>
       <EuiTitle size="l"><h2>Register Certificate from PDF</h2></EuiTitle>
-      <EuiSpacer size="m" />
+      <EuiSpacer size="l" />
       <EuiForm component="form" onSubmit={handleRegister}>
-        <EuiFormRow label="PDF File" fullWidth>
+        <EuiFormRow label="Recipient Ethereum Address">
+          <EuiFieldText value={recipient} onChange={e => setRecipient(e.target.value)} />
+        </EuiFormRow>
+        <EuiFormRow label="PDF File">
           <EuiFilePicker
             id="pdfFilePicker"
-            initialPromptText="Select a PDF file"
+            initialPromptText="Select or drag and drop a PDF file"
             onChange={files => setPdfFile(files && files.length > 0 ? files[0] : null)}
             accept="application/pdf"
-            fullWidth
+            display="default"
           />
         </EuiFormRow>
-        <EuiFormRow label="Recipient Ethereum Address" fullWidth>
-          <EuiFieldText
-            placeholder="0x..."
-            value={recipient}
-            onChange={e => setRecipient(e.target.value)}
-            fullWidth
-          />
-        </EuiFormRow>
-        <EuiFormRow label="Storage Mode" fullWidth>
+        <EuiFormRow label="Storage Type">
           <EuiRadioGroup
             options={[
-              { id: 'OFF_CHAIN', label: 'Off-chain (IPFS)' },
-              { id: 'ON_CHAIN', label: 'On-chain' },
+              { id: 'ON_CHAIN', label: 'On-Chain' },
+              { id: 'OFF_CHAIN', label: 'Off-Chain (IPFS)' },
             ]}
             idSelected={storageMode}
-            onChange={(id) => setStorageMode(id)}
+            onChange={id => setStorageMode(id)}
             name="storageMode"
           />
         </EuiFormRow>
+        <EuiSpacer size="m" />
         <EuiButton type="submit" isLoading={registerLoading} fill>Register Certificate</EuiButton>
       </EuiForm>
-      {registerError && <EuiCallOut color="danger" title="Error" iconType="alert">{registerError}</EuiCallOut>}
-      {registerSuccess && (
-        <EuiCallOut color="success" title="Certificate Registered!" iconType="check">
-          <div>Hash: {registerSuccess.cert_hash}</div>
-          <div>Issuer: {registerSuccess.issuer}</div>
-          <div>Recipient: {registerSuccess.student}</div>
-          <div>Issued At: {new Date(registerSuccess.issued_at * 1000).toLocaleString()}</div>
-          <div>IPFS: {registerSuccess.ipfs_cid}</div>
-        </EuiCallOut>
-      )}
+      <EuiSpacer size="m" />
+      {registerError && <EuiCallOut color="danger" title="Error">{registerError}</EuiCallOut>}
+      {registerSuccess && <EuiCallOut color="success" title="Success">Certificate registered successfully!</EuiCallOut>}
     </EuiPanel>
   );
 };

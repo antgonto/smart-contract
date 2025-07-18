@@ -8,50 +8,53 @@ import {
   EuiBasicTable,
   EuiCallOut,
 } from '@elastic/eui';
-import { fetchStudentDiplomas, downloadCertificateOffchain } from '../services/api';
+import { fetchStudentDiplomas, downloadCertificateOffchain, downloadCertificateOnchain } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { saveAs } from 'file-saver';
+
+const downloadDiploma = async (item: any) => {
+    if (item.storage_mode === 'OFF_CHAIN' && item.ipfs_hash) {
+        try {
+            const blob = await downloadCertificateOffchain(item.ipfs_hash);
+            saveAs(blob, `${item.ipfs_hash}.pdf`);
+        } catch (e) {
+            alert('Failed to download off-chain diploma.');
+        }
+    } else if (item.storage_mode === 'ON_CHAIN' && item.cert_hash) {
+        try {
+            const blob = await downloadCertificateOnchain(item.cert_hash);
+            saveAs(blob, `${item.cert_hash}.pdf`);
+        } catch (e) {
+            alert('Failed to download on-chain diploma.');
+        }
+    } else {
+        alert('Diploma is not available for download.');
+    }
+};
 
 const diplomaColumns = [
   { field: 'id', name: 'ID', width: '5%' },
-  { field: 'cert_hash', name: 'On-chain Certificate Hash', width: '35%' },
-  { field: 'ipfs_hash', name: 'Off-chain Certificate Hash', width: '35%' },
-  { field: 'issue_date', name: 'Issue Date', width: '15%',
+  { field: 'cert_hash', name: 'Certificate Hash', width: '30%' },
+  { field: 'ipfs_hash', name: 'IPFS Hash', width: '30%' },
+  { field: 'storage_mode', name: 'Storage Mode', width: '15%' },
+  { field: 'issue_date', name: 'Issue Date', width: '10%',
     render: (value: any) => (
       value ? new Date(value * 1000).toLocaleDateString() : '-'
     )
   },
   {
     name: 'Download',
+    width: '10%',
     render: (item: any) => (
-      item.ipfs_hash ? (
-        <button onClick={() => downloadDiploma(item.ipfs_hash)}>Download PDF</button>
-      ) : (
-        <span style={{ color: '#888' }}>Not available</span>
-      )
+        <button onClick={() => downloadDiploma(item)}>Download PDF</button>
     ),
   },
 ];
 
-const downloadDiploma = async (ipfsHash: string) => {
-  try {
-    const blob = await downloadCertificateOffchain(ipfsHash);
-    const url = window.URL.createObjectURL(new Blob([blob]));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `${ipfsHash}.pdf`);
-    document.body.appendChild(link);
-    link.click();
-    link.parentNode?.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  } catch (e) {
-    alert('Failed to download diploma.');
-  }
-};
-
 const StudentDiplomas = () => {
-  const { isAuthenticated, roles, address } = useAuth();
+  const { isAuthenticated, roles } = useAuth();
   const [diplomas, setDiplomas] = useState<any[]>([]);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated || !roles.includes('Student')) {
@@ -61,18 +64,20 @@ const StudentDiplomas = () => {
     // Use the address from logged.txt via backend endpoint
     const fetchLoggedAddressAndDiplomas = async () => {
       try {
-        const res = await fetch('/app/v1/smartcontracts/logged-address-get');
+        const res = await fetch('/app/v1/auth/logged-address');
         const data = await res.json();
-        console.log("Address: ", data)
         if (data.address) {
           const diplomasData = await fetchStudentDiplomas(data.address);
-          console.log(diplomasData)
           setDiplomas(diplomasData);
         } else {
           setError('No logged address found.');
         }
-      } catch (e) {
-        setError('Failed to fetch diplomas.');
+      } catch (e: any) {
+        if (typeof e?.message === 'string') {
+          setError(e.message);
+        } else {
+          setError('An unknown error occurred while fetching diplomas.');
+        }
       }
     };
     fetchLoggedAddressAndDiplomas();

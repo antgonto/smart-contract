@@ -29,13 +29,18 @@ export const fetchDashboardMetrics = async () => {
   return response.data;
 };
 
-export const registerCertificate = async (student_address: string, pdf: string, storage_mode: string) => {
-    const response = await api.post('/app/v1/smartcontracts/smartcontract/register_certificate', {
-        student_address,
-        pdf,
-        storage_mode,
-    });
-    return response.data;
+export const registerCertificate = async (recipient: string, pdfFile: File, storageMode: string) => {
+  const formData = new FormData();
+  formData.append('file', pdfFile);
+  formData.append('recipient', recipient);
+  formData.append('storage_mode', storageMode);
+
+  const response = await api.post('/app/v1/smartcontracts/smartcontract/register_certificate/', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
 };
 
 export const fetchCertificates = async () => {
@@ -43,11 +48,32 @@ export const fetchCertificates = async () => {
   return response.data;
 };
 
+export const verifyCertificateDetails = async (certHash: string) => {
+    const response = await api.get(`/app/v1/smartcontracts/smartcontract/verify_certificate_details/${certHash}`);
+    return response.data;
+};
+
 export const downloadCertificateOffchain = async (ipfsHash: string) => {
   const response = await api.get(`/app/v1/smartcontracts/smartcontract/download_offchain/${ipfsHash}`, {
     responseType: 'blob',
   });
   return response.data;
+};
+
+export const downloadCertificateOnchain = async (certHash: string) => {
+  const response = await verifyCertificateDetails(certHash);
+  if (response.pdf_on_chain) {
+    const hex = response.pdf_on_chain;
+    const bytes = new Uint8Array(hex.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
+    return new Blob([bytes], { type: 'application/pdf' });
+  }
+  throw new Error('No on-chain PDF data found.');
+};
+
+export const downloadOnchainCertificate = async (certHash: string) => {
+  // This will trigger a file download in the browser
+  const url = `${api.defaults.baseURL}/app/v1/smartcontracts/smartcontract/download_onchain/${certHash}`;
+  window.open(url, '_blank');
 };
 
 export const checkRoles = async (address: string) => {
@@ -79,7 +105,7 @@ export const fetchStudentDiplomas = async (studentAddress: string) => {
   if (!studentAddress) {
     throw new Error('Student address is required');
   }
-  const response = await api.get('/app/v1/smartcontracts/student/certificates', {
+  const response = await api.get('/app/v1/student/certificates', {
     params: { student_address: studentAddress },
   });
   console.log("Response", response)
