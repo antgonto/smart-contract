@@ -20,6 +20,7 @@ class Account(models.Model):
     mnemonic = models.TextField(null=True, blank=True)
     name = models.CharField(max_length=100, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
+    role = models.CharField(max_length=20, null=True, blank=True)  # Added role field
 
     def __str__(self):
         return self.address
