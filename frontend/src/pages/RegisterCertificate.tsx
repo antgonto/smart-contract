@@ -8,13 +8,15 @@ import {
   EuiFieldText,
   EuiFilePicker,
   EuiButton,
-  EuiCallOut
+  EuiCallOut,
+  EuiRadioGroup,
 } from '@elastic/eui';
-import { registerCertificateFromPdf } from '../services/api';
+import { registerCertificate } from '../services/api';
 
 const RegisterCertificate = () => {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [recipient, setRecipient] = useState('');
+  const [storageMode, setStorageMode] = useState('OFF_CHAIN');
   const [registerLoading, setRegisterLoading] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [registerSuccess, setRegisterSuccess] = useState<any>(null);
@@ -32,14 +34,24 @@ const RegisterCertificate = () => {
       return;
     }
     setRegisterLoading(true);
-    try {
-      const result = await registerCertificateFromPdf(pdfFile, recipient);
-      setRegisterSuccess(result);
-    } catch (err: any) {
-      setRegisterError(err?.response?.data?.detail || 'Registration failed.');
-    } finally {
+
+    const reader = new FileReader();
+    reader.readAsDataURL(pdfFile);
+    reader.onload = async () => {
+      try {
+        const base64Pdf = (reader.result as string).split(',')[1];
+        const result = await registerCertificate(recipient, base64Pdf, storageMode);
+        setRegisterSuccess(result);
+      } catch (err: any) {
+        setRegisterError(err?.response?.data?.detail || 'Registration failed.');
+      } finally {
+        setRegisterLoading(false);
+      }
+    };
+    reader.onerror = () => {
+      setRegisterError('Failed to read the PDF file.');
       setRegisterLoading(false);
-    }
+    };
   };
 
   return (
@@ -62,6 +74,17 @@ const RegisterCertificate = () => {
             value={recipient}
             onChange={e => setRecipient(e.target.value)}
             fullWidth
+          />
+        </EuiFormRow>
+        <EuiFormRow label="Storage Mode" fullWidth>
+          <EuiRadioGroup
+            options={[
+              { id: 'OFF_CHAIN', label: 'Off-chain (IPFS)' },
+              { id: 'ON_CHAIN', label: 'On-chain' },
+            ]}
+            idSelected={storageMode}
+            onChange={(id) => setStorageMode(id)}
+            name="storageMode"
           />
         </EuiFormRow>
         <EuiButton type="submit" isLoading={registerLoading} fill>Register Certificate</EuiButton>

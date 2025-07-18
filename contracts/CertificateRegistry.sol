@@ -25,7 +25,7 @@ contract CertificateRegistry is AccessControl {
     mapping(bytes32 => Certificate) public certificates;
     mapping(address => bytes32[]) public certificatesByStudent;
 
-    event CertificateRegistered(
+    event DiplomaIssued(
         bytes32 indexed diplomaId,
         address indexed issuer,
         address indexed student,
@@ -78,7 +78,7 @@ contract CertificateRegistry is AccessControl {
             _grantRole(STUDENT_ROLE, student);
         }
 
-        emit CertificateRegistered(diplomaId, msg.sender, student, block.timestamp, metadata, storageMode, ipfsHash, pdfOnChain);
+        emit DiplomaIssued(diplomaId, msg.sender, student, block.timestamp, metadata, storageMode, ipfsHash, pdfOnChain);
     }
 
     function revokeCertificate(bytes32 certHash) external onlyRole(ISSUER_ROLE) {

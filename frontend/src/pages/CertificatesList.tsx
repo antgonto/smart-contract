@@ -12,21 +12,22 @@ import {
   fetchCertificates,
   downloadCertificateOffchain, fetchDashboardMetrics
 } from '../services/api';
+m import { saveAs } from 'file-saver';
 
-const downloadCertificate = async(ipfsHash: string) => {
-  try {
-    const blob = await downloadCertificateOffchain(ipfsHash);
-    const url = window.URL.createObjectURL(new Blob([blob]));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `${ipfsHash}.pdf`);
-    document.body.appendChild(link);
-    link.click();
-    link.parentNode?.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  } catch (e) {
-    alert('Failed to download certificate.');
-  }
+const downloadCertificate = async (item: any) => {
+    if (item.storage_mode === 'OFF_CHAIN' && item.ipfs_hash) {
+        try {
+            const blob = await downloadCertificateOffchain(item.ipfs_hash);
+            saveAs(blob, `${item.ipfs_hash}.pdf`);
+        } catch (e) {
+            alert('Failed to download off-chain certificate.');
+        }
+    } else if (item.storage_mode === 'ON_CHAIN' && item.cert_hash) {
+        // On-chain download logic will be added here
+        alert('On-chain download is not yet implemented.');
+    } else {
+        alert('Certificate is not available for download.');
+    }
 };
 
 const certificateColumns = [
@@ -34,6 +35,7 @@ const certificateColumns = [
   { field: 'block_number', name: 'Block Number', width: '7%' },
   { field: 'cert_hash', name: 'On-chain Certificate Hash', width: '35%' },
   { field: 'ipfs_hash', name: 'Off-chain Certificate Hash', width: '30%'},
+  { field: 'storage_mode', name: 'Storage Mode', width: '10%' },
   {
     name: 'Recipient Address',
     width: '20%',
@@ -42,13 +44,9 @@ const certificateColumns = [
   { field: 'gas_used', name: 'Gas Used', width: '6%' },
   { field: 'cumulative_gas', name: 'Cumulative Gas', width: '10%' },
   {
-    name: 'Download Off-chain',
+    name: 'Download',
     render: (item: any) => (
-      item.ipfs_hash ? (
-        <button onClick={() => downloadCertificate(item.ipfs_hash)}>Download PDF</button>
-      ) : (
-        <span style={{ color: '#888' }}>Not available</span>
-      )
+      <button onClick={() => downloadCertificate(item)}>Download PDF</button>
     ),
   },
 ];
@@ -61,7 +59,7 @@ const CertificatesList  = () => {
 
   useEffect(() => {
     fetchDashboardMetrics()
-      .then(data => {
+      .then(dataa => {
         setMetrics(data);
         setLoading(false);
       })

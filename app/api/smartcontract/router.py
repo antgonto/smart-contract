@@ -385,7 +385,7 @@ def list_certificates(request):
         contract = manager.get_contract()
         if contract is None:
             raise HttpError(500, f"Contract not loaded: {manager.get_error()}")
-        events = contract.events.CertificateRegistered().get_logs(fromBlock=0)
+        events = contract.events.DiplomaIssued().get_logs(fromBlock=0)
         for event in events:
             cert_hash = event.args.diplomaId.hex()
             issuer = getattr(event.args, 'issuer', None)
@@ -437,8 +437,8 @@ def dashboard_metrics(request):
     recent_operations = []
     try:
         if contract is not None:
-            # Fetch CertificateRegistered events
-            reg_events = contract.events.CertificateRegistered().get_logs(fromBlock=0)
+            # Fetch DiplomaIssued events
+            reg_events = contract.events.DiplomaIssued().get_logs(fromBlock=0)
             onchain = len(reg_events)
             offchain = 0
             for event in reg_events:
@@ -455,7 +455,7 @@ def dashboard_metrics(request):
             all_events = []
             for event in reg_events:
                 all_events.append({
-                    "event": "CertificateRegistered",
+                    "event": "DiplomaIssued",
                     "blockNumber": getattr(event, 'blockNumber', 0),
                     "actor": getattr(event.args, 'issuer', 'unknown') if hasattr(event.args, 'issuer') else 'unknown',
                     "operation": "Issued Certificate",
@@ -474,7 +474,7 @@ def dashboard_metrics(request):
             # Sort all events by blockNumber descending
             all_events_sorted = sorted(all_events, key=lambda e: e['blockNumber'], reverse=True)
             # Prepare recent_registrations and recent_operations
-            recent_registrations = min(8, len([e for e in all_events_sorted if e['event'] == 'CertificateRegistered']))
+            recent_registrations = min(8, len([e for e in all_events_sorted if e['event'] == 'DiplomaIssued']))
 
             for e in all_events_sorted:
                 block_number = e['blockNumber']
@@ -850,7 +850,7 @@ def list_certificates_by_issuer(request, issuer_address: str):
         contract = manager.get_contract()
         if contract is None:
             raise HttpError(500, f"Contract not loaded: {manager.get_error()}")
-        events = contract.events.CertificateRegistered().get_logs(fromBlock=0)
+        events = contract.events.DiplomaIssued().get_logs(fromBlock=0)
         for event in events:
             # Only include certificates where the issuer matches the connected account
             if event.args.issuer.lower() == issuer_address.lower():
@@ -897,7 +897,7 @@ def list_certificates_by_student(request, student_address: str):
         contract = manager.get_contract()
         if contract is None:
             raise HttpError(500, f"Contract not loaded: {manager.get_error()}")
-        events = contract.events.CertificateRegistered().get_logs(fromBlock=0)
+        events = contract.events.DiplomaIssued().get_logs(fromBlock=0)
         for event in events:
             # Only include certificates where the recipient matches the connected account
             if event.args.student.lower() == student_address.lower():

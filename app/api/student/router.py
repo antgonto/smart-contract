@@ -42,7 +42,7 @@ def get_my_certificates(request, student_address: str):
     contract = manager.get_contract()
     try:
         # Use the event logs to get all certificates, then filter by student_address
-        events = contract.events.CertificateRegistered().get_logs(fromBlock=0)
+        events = contract.events.DiplomaIssued().get_logs(fromBlock=0)
         certificates = []
         for event in events:
             cert_hash = event.args.diplomaId.hex()
