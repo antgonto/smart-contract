@@ -65,7 +65,7 @@ All services are containerized and orchestrated via Docker Compose for local dev
 
 ## User Flows
 
-![End-to-end flow for issuing, holding and verifying blockchain-anchored certificates.](flows.png)
+![End-to-end flow for issuing, holding and verifying blockchain-anchored certificates.](./flows.png)
 
 *Figure: End-to-end flow for issuing, holding and verifying blockchain-anchored certificates.*
 
