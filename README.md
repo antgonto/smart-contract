@@ -1,5 +1,7 @@
 # Diploma Provisioning System
 
+### [License](license.md)
+
 ### Video Overview
 
 > **Note:** GitHub does not support embedded playback of local video files. To view the video, [click here to download Video-SmartContract.mp4](Video-SmartContract.mp4?raw=true) and open it locally.
